@@ -57,6 +57,7 @@ CREATE TABLE "method_ore" (
 	"ore_id"    INTEGER NOT NULL,
 	"efficiency" REAL NOT NULL DEFAULT '0',
 	"cost"      REAL NOT NULL DEFAULT '0',
+	"duration"  REAL NOT NULL DEFAULT '0',
 	"created"	REAL NOT NULL DEFAULT (DATETIME('now', 'localtime')),
 	"updated"	REAL NOT NULL DEFAULT (DATETIME('now', 'localtime')),
 	FOREIGN KEY("method_id") REFERENCES "method"("id"),
@@ -83,7 +84,7 @@ CREATE TABLE "mining_session" (
 	"is_open"       INTEGER NOT NULL DEFAULT '0',
 	"created"   	REAL NOT NULL DEFAULT (DATETIME('now', 'localtime')),
 	"updated"	    REAL NOT NULL DEFAULT (DATETIME('now', 'localtime')),
-	"closed"	    REAL NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+	"closed"	    REAL,
 );
 
 DROP TABLE IF EXISTS "mining_session_user";
@@ -114,3 +115,10 @@ CREATE TABLE "mining_session_entry" (
 	FOREIGN KEY("ore_id") REFERENCES "ore"("id"),
 	FOREIGN KEY("method_id") REFERENCES "method"("id")
 );
+
+INSERT INTO "station" ("name") VALUES ('ARC-L1'), ('CRU-L1'), ('HUR-L1'), ('HUR-L2'), ('MIC-L1');
+INSERT INTO "ore" ("name") VALUES ('Agricium'), ('Aluminium'), ('Beryl'), ('Bexalite'), ('Borase'), ('Copper'),
+    ('Corundum'), ('Diamond'), ('Gold'), ('Hephaestanite'), ('Laranite'), ('Quantanium'), ('Quartz'), ('Taranite'),
+    ('Titanium'), ('Tungsten');
+INSERT INTO "method" ("name") VALUES ('Cormack'), ('Dinyx Solventation'), ('Electrostarolysis'), ('Ferron Exchange'),
+('Gaskin Process'), ('Kazen Winnowing'), ('Pyrometric Chromalysis'), ('Thermonatic Deposition'), ('XCR Reaction');

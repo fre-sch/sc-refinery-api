@@ -4,16 +4,20 @@ from time import time
 
 from aiohttp import web
 
-from screfinery.storage import UserSessionStore, UserStore, UserPermStore
+from screfinery import storage
 from screfinery.util import parse_cookie_header, json_dumps
 from random import randint
 
 log = logging.getLogger("screfinery.auth")
 routes = web.RouteTableDef()
+user_session_store = storage.UserSessionStore()
+user_store = storage.UserStore()
+user_perm_store = storage.UserPermStore()
 
-user_session_store = UserSessionStore()
-user_store = UserStore()
-user_perm_store = UserPermStore()
+
+def hash_password(salt, value):
+    hash_value = f"{salt}/{value}"
+    return sha256(hash_value.encode("utf-8")).hexdigest()
 
 
 def mk_user_session_hash(user_id, user_ip, salt):
@@ -46,10 +50,10 @@ async def check_request_session(request):
 
     db = request.app["db"]
     db_session = await user_session_store.find_one(
-        db, user_session_store.table.user_id == user_id)
+        db, storage.UserSession.user_id == user_id)
 
     if db_session is None:
-        log.warning("missing db session")
+        log.warning(f"missing db session for user_id: {user_id}")
         raise web.HTTPUnauthorized()
 
     server_session_hash = mk_user_session_hash(
@@ -65,7 +69,7 @@ async def check_request_session(request):
         == user_session_hash
     )
     if not is_valid_session:
-        log.warning("session hash invalid")
+        log.warning(f"session hash invalid for user_id: {db_session['user_id']}")
         raise web.HTTPUnauthorized()
     return user_id
 
@@ -73,7 +77,8 @@ async def check_request_session(request):
 async def check_user_perm(request, scope):
     user_id = await check_request_session(request)
     db = request.app["db"]
-    _, user_perms = await user_perm_store.find_all(db, user_perm_store.table.user_id == user_id, limit=-1)
+    _, user_perms = await user_perm_store.find_all(
+        db, storage.UserPerm.user_id == user_id, limit=-1)
     user_scopes = set(it["scope"] for it in user_perms)
     log.debug(f"check user perms: '{scope}' in {user_scopes}")
     if scope not in user_scopes:
@@ -82,14 +87,20 @@ async def check_user_perm(request, scope):
 
 @routes.post("/api/login")
 async def handle_login(request):
-    body = await request.post()
+    body = await request.json()
     user_mail = body.get("user_mail")
-    # user_password = body.get("user_password")
-    if user_mail is None:
+    user_password = body.get("user_password")
+    if user_mail is None or user_password is None:
         raise web.HTTPUnauthorized()
+    password_hash = hash_password(
+        request.app["config"]["main"]["password_salt"],
+        user_password)
     db = request.app["db"]
-    user = await user_store.find_one(db, user_store.table.mail == user_mail)
+    user = await user_store.find_one(
+        db, storage.User.mail == user_mail
+        and storage.User.password_hash == password_hash)
     if user is None:
+        log.warning(f"failed login attempt: {user_mail}")
         raise web.HTTPUnauthorized()
 
     user_session = dict(
@@ -101,7 +112,7 @@ async def handle_login(request):
         user_session["user_id"], user_session["user_ip"], user_session["salt"]
     )
     log.debug(f"new session hash: {server_session_hash}")
-    await user_session_store.remove_all(db, user_session_store.table.user_id == user["id"])
+    await user_session_store.remove_all(db, storage.UserSession.user_id == user["id"])
     await user_session_store.create(db, user_session)
     response = web.json_response(user, dumps=json_dumps)
     response.set_cookie("u", user["id"], path="/", max_age=60 * 60 * 24)

@@ -7,9 +7,12 @@ log = logging.getLogger("screfinery.basestore")
 
 
 class BaseStore:
-    def __init__(self, table_name):
-        self.table_name = table_name
-        self.table = Table(self.table_name)
+    def __init__(self, table):
+        self.table = table
+
+    @property
+    def table_name(self):
+        return self.table.name
 
     @property
     def primary_key(self):

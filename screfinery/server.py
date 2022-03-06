@@ -4,10 +4,10 @@ from aiohttp import web
 import logging
 import traceback
 
+from pypika import Query, Table
+
 from screfinery.auth import routes as auth_routes
-from screfinery.storage import ore_validate, \
-    station_validate, method_validate, InvalidDataError, StationStore, \
-    UserStore, UserSessionStore, OreStore, MethodStore, UserPermStore
+from screfinery import storage
 
 from screfinery.util import parse_args, configure_app, json_dumps
 from screfinery import google_signin
@@ -22,6 +22,47 @@ async def hello(request):
     return web.Response(text="hello!")
 
 
+@routes.get("/api/init")
+async def init(request):
+    db = request.app["db"]
+    result = {
+        "stations": list(),
+        "ores": list(),
+        "methods": list()
+    }
+    query = str(Query.from_(storage.Station).select("*"))
+    async with db.execute(query) as cursor:
+        async for row in cursor:
+            result["stations"].append(row)
+
+    query = str(Query.from_(storage.Ore).select("*"))
+    async with db.execute(query) as cursor:
+        async for row in cursor:
+            result["ores"].append(row)
+
+    query = str(
+        Query.from_(storage.Method)
+        .select(
+            storage.Method.id.as_("method_id"),
+            storage.Method.name.as_("method_name"),
+            storage.Ore.id.as_("ore_id"),
+            storage.Ore.name.as_("ore_name"),
+            storage.MethodOre.efficiency.as_("method_efficiency"),
+            storage.MethodOre.cost.as_("method_cost")
+        )
+        .left_join(storage.MethodOre)
+        .on(storage.MethodOre.method_id == storage.Method.id)
+        .left_join(storage.Ore)
+        .on(storage.MethodOre.ore_id == storage.Ore.id)
+    )
+    log.debug(query)
+    async with db.execute(query) as cursor:
+        async for row in cursor:
+            result["methods"].append(row)
+
+    return web.json_response(result, dumps=json_dumps)
+
+
 @web.middleware
 async def error_middleware(request, handler):
     try:
@@ -32,7 +73,7 @@ async def error_middleware(request, handler):
         status_code = response.status
     except web.HTTPException as ex:
         raise
-    except InvalidDataError as ex:
+    except storage.InvalidDataError as ex:
         message = {
             "status": "invalid",
             "invalid": ex.errors
@@ -62,22 +103,22 @@ async def init_app(args):
     app.add_routes(google_signin.routes)
     app.add_routes(auth_routes)
     app.add_routes(
-        ResourceHandler.factory("/api/user", UserStore())
+        ResourceHandler.factory("/api/user", storage.UserStore())
     )
     app.add_routes(
-        RelResourceHandler.factory("/api/user_session", UserSessionStore())
+        RelResourceHandler.factory("/api/user_session", storage.UserSessionStore(), rel_column="user_id")
     )
     app.add_routes(
-        RelResourceHandler.factory("/api/user_perm", UserPermStore())
+        RelResourceHandler.factory("/api/user_perm", storage.UserPermStore(), rel_column="user_id")
     )
     app.add_routes(
-        ResourceHandler.factory("/api/station", StationStore(), station_validate)
+        ResourceHandler.factory("/api/station", storage.StationStore(), storage.station_validate)
     )
     app.add_routes(
-        ResourceHandler.factory("/api/ore", OreStore())
+        ResourceHandler.factory("/api/ore", storage.OreStore())
     )
     app.add_routes(
-        ResourceHandler.factory("/api/method", MethodStore())
+        ResourceHandler.factory("/api/method", storage.MethodStore())
     )
     return app
 

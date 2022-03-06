@@ -100,9 +100,13 @@ class ResourceHandler:
 
 class RelResourceHandler(ResourceHandler):
 
+    def __init__(self, store, validate, rel_column):
+        super().__init__(store, validate)
+        self.rel_column = rel_column
+
     @property
     def foreign_key(self):
-        return getattr(self.table, self.foreign_key_column)
+        return getattr(self.store.table, self.rel_column)
 
     async def index_for(self, request):
         await check_user_perm(request, f"{self.resource_name}.index")
@@ -146,8 +150,8 @@ class RelResourceHandler(ResourceHandler):
         raise web.HTTPNoContent()
 
     @classmethod
-    def factory(cls, base_path, model, validate=_default_validate):
-        handler = cls(model, validate)
+    def factory(cls, base_path, model, validate=_default_validate, rel_column=None):
+        handler = cls(model, validate, rel_column)
         return [
             web.get(base_path + "/", handler.index),
             web.get(base_path + "/{rel_id}", handler.index_for),

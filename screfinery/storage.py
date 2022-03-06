@@ -1,21 +1,32 @@
 from jsonschema import Draft7Validator
+from pypika import Table
 
 from screfinery.basestore import BaseStore
 
 
+User = Table("user")
+UserSession = Table("user_session")
+UserPerm = Table("user_perm")
+Station = Table("station")
+Ore = Table("ore")
+Method = Table("method")
+MethodOre = Table("method_ore")
+MiningSession = Table("mining_session")
+
+
 class UserSessionStore(BaseStore):
     def __init__(self):
-        super().__init__("user_session")
+        super().__init__(UserSession)
 
 
 class UserStore(BaseStore):
     def __init__(self):
-        super().__init__("user")
+        super().__init__(User)
 
 
 class UserPermStore(BaseStore):
     def __init__(self):
-        super().__init__("user_perm")
+        super().__init__(UserPerm)
 
     @property
     def primary_key(self):
@@ -24,22 +35,22 @@ class UserPermStore(BaseStore):
 
 class StationStore(BaseStore):
     def __init__(self):
-        super().__init__("station")
+        super().__init__(Station)
 
 
 class OreStore(BaseStore):
     def __init__(self):
-        super().__init__("ore")
+        super().__init__(Ore)
 
 
 class MethodStore(BaseStore):
     def __init__(self):
-        super().__init__("method")
+        super().__init__(Method)
 
 
 class MiningSessionStore(BaseStore):
     def __init__(self):
-        super().__init__("mining_session")
+        super().__init__(MiningSession)
 
 
 class InvalidDataError(Exception):
