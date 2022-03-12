@@ -3,6 +3,7 @@ import logging
 from argparse import ArgumentParser
 from datetime import datetime
 from functools import partial
+from hashlib import sha256
 from pathlib import Path
 from configparser import ConfigParser
 
@@ -62,6 +63,10 @@ async def configure_app(app, args):
         raise NotImplementedError(f"{use_db} not implemented")
 
 
+def first(itr):
+    return next(iter(itr), None)
+
+
 def json_convert(value):
     if isinstance(value, aiosqlite.Row):
         return dict(value)
@@ -76,3 +81,13 @@ def json_convert(value):
 
 
 json_dumps = partial(json.dumps, default=json_convert)
+
+
+def hash_password(salt, value):
+    hash_value = f"{salt}/{value}"
+    return sha256(hash_value.encode("utf-8")).hexdigest()
+
+
+def mk_user_session_hash(user_id, user_ip, salt):
+    hash_value = f"{user_id}/{user_ip}/{salt}"
+    return sha256(hash_value.encode("utf-8")).hexdigest()

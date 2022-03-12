@@ -1,7 +1,8 @@
 import logging
+import asyncio
 
 from aiohttp import web
-from pypika import Query, functions as func
+from pypika import Query, functions as func, Criterion, Order
 
 from screfinery.auth import check_user_perm
 from screfinery.util import json_dumps
@@ -14,61 +15,66 @@ def _default_validate(data, case):
     pass
 
 
+def query_params_decode(value):
+    result = dict()
+    if not value:
+        return result
+    for kv in value.split(";"):
+        try:
+            key, val = kv.split(":")
+            result[key] = val
+        except Exception:
+            pass
+    return result
+
+
 class ResourceHandler:
-    def __init__(self, store, validate):
-        self.validate = validate
+    def __init__(self, store, validator):
+        self.validator = validator
         self.store = store
+
+    async def validate_request(self, request, case):
+        data = await request.json()
+        if self.validator is not None:
+            data = self.validator(request.app["config"], data, case)
+        return data
 
     @property
     def resource_name(self):
         return self.store.table_name
+
+    def _query_filter(self, request):
+        filter_ = query_params_decode(request.query.get("filter", ""))
+        return Criterion.all([
+            getattr(self.store.table, key).like(f"%{value}%")
+            for key, value in filter_.items()
+        ])
 
     async def index(self, request):
         await check_user_perm(request, f"{self.resource_name}.index")
         db = request.app["db"]
         offset = request.query.get("offset", 0)
         limit = request.query.get("limit", 10)
-        response_body = {
-            "total_count": 0,
-            "items": []
-        }
-        query = (
-            Query.from_(self.store.table)
-                .select(func.Count("*"))
-        )
-        query_str = str(query)
-        log.debug(query_str)
-        async with db.execute(query_str) as cursor:
-            row = await cursor.fetchone()
-            response_body["total_count"] = row[0]
-
-        query = (
-            Query.from_(self.store.table)
-                .select("*")
-                .orderby(self.store.table.created)
-                .offset(offset)
-                .limit(limit)
-        )
-        query_str = str(query)
-        log.debug(query_str)
-        async with db.execute(query_str) as cursor:
-            async for row in cursor:
-                response_body["items"].append(row)
-
+        sort = query_params_decode(request.query.get("sort", ""))
+        filter_criteria = self._query_filter(request)
+        response_body = {}
+        (
+            response_body["total_count"],
+            response_body["items"]
+        ) = await self.store.find_all(
+            db, criteria=filter_criteria, sort=sort, offset=offset, limit=limit)
         return web.json_response(response_body, dumps=json_dumps)
 
     async def create(self, request):
         await check_user_perm(request, f"{self.resource_name}.create")
-        data = await request.json()
-        self.validate(data, "create")
+        data = await self.validate_request(request, "create")
         resource = await self.store.create(request.app["db"], data)
         return web.json_response(resource, dumps=json_dumps)
 
     async def update(self, request):
         await check_user_perm(request, f"{self.resource_name}.update")
-        data = await request.json()
+        data = await self.validate_request(request, "update")
         resource_id = request.match_info["resource_id"]
-        self.validate(data, "update")
         result = await self.store.update_id(request.app["db"], resource_id, data)
         return web.json_response(result, dumps=json_dumps)
 
@@ -90,8 +96,10 @@ class ResourceHandler:
     def factory(cls, base_path, model, validate=_default_validate):
         handler = cls(model, validate)
         return [
+            web.get(base_path, handler.index),
             web.get(base_path + "/", handler.index),
             web.get(base_path + "/{resource_id}", handler.find_id),
+            web.post(base_path, handler.create),
             web.post(base_path + "/", handler.create),
             web.put(base_path + "/{resource_id}", handler.update),
             web.delete(base_path + "/{resource_id}", handler.remove),
@@ -100,8 +108,8 @@ class ResourceHandler:
 
 class RelResourceHandler(ResourceHandler):
 
-    def __init__(self, store, validate, rel_column):
-        super().__init__(store, validate)
+    def __init__(self, store, validator, rel_column):
+        super().__init__(store, validator)
         self.rel_column = rel_column
 
     @property

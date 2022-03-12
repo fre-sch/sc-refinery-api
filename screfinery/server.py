@@ -1,11 +1,13 @@
 from json import JSONDecodeError
 
+import aiohttp_cors
 from aiohttp import web
 import logging
 import traceback
 
 from pypika import Query, Table
 
+import screfinery.validation
 from screfinery.auth import routes as auth_routes
 from screfinery import storage
 
@@ -73,7 +75,7 @@ async def error_middleware(request, handler):
         status_code = response.status
     except web.HTTPException as ex:
         raise
-    except storage.InvalidDataError as ex:
+    except screfinery.validation.InvalidDataError as ex:
         message = {
             "status": "invalid",
             "invalid": ex.errors
@@ -103,23 +105,34 @@ async def init_app(args):
     app.add_routes(google_signin.routes)
     app.add_routes(auth_routes)
     app.add_routes(
-        ResourceHandler.factory("/api/user", storage.UserStore())
+        ResourceHandler.factory("/user", storage.UserStore(), storage.user_validator)
     )
     app.add_routes(
-        RelResourceHandler.factory("/api/user_session", storage.UserSessionStore(), rel_column="user_id")
+        RelResourceHandler.factory("/user_session", storage.UserSessionStore(), rel_column="user_id")
     )
     app.add_routes(
-        RelResourceHandler.factory("/api/user_perm", storage.UserPermStore(), rel_column="user_id")
+        RelResourceHandler.factory("/user_perm", storage.UserPermStore(), rel_column="user_id")
     )
     app.add_routes(
-        ResourceHandler.factory("/api/station", storage.StationStore(), storage.station_validate)
+        ResourceHandler.factory("/station", storage.StationStore(), storage.station_validate)
     )
     app.add_routes(
-        ResourceHandler.factory("/api/ore", storage.OreStore())
+        ResourceHandler.factory("/ore", storage.OreStore())
     )
     app.add_routes(
-        ResourceHandler.factory("/api/method", storage.MethodStore())
+        ResourceHandler.factory("/method", storage.MethodStore())
     )
+    cors = aiohttp_cors.setup(app, defaults={
+        "*": aiohttp_cors.ResourceOptions(
+            allow_credentials=True,
+            expose_headers="*",
+            allow_headers="*",
+            allow_methods="*"
+        )
+    })
+    for route in list(app.router.routes()):
+        if not isinstance(route.resource, web.StaticResource):  # <<< WORKAROUND
+            cors.add(route)
     return app
 
 

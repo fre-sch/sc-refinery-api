@@ -6,7 +6,7 @@ from screfinery.util import parse_cookie_header
 routes = web.RouteTableDef()
 
 
-@routes.post("/api/signin")
+@routes.post("/google_signin")
 async def signin(request):
     config = request.app["config"]
     google_certs = request.app["google_certs"]

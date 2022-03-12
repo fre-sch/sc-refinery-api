@@ -1,29 +1,20 @@
 import logging
-from hashlib import sha256
 from time import time
 
 from aiohttp import web
+from pypika import Criterion
 
 from screfinery import storage
-from screfinery.util import parse_cookie_header, json_dumps
+from screfinery.util import parse_cookie_header, json_dumps, hash_password, \
+    mk_user_session_hash
 from random import randint
+
 
 log = logging.getLogger("screfinery.auth")
 routes = web.RouteTableDef()
 user_session_store = storage.UserSessionStore()
 user_store = storage.UserStore()
 user_perm_store = storage.UserPermStore()
-
-
-def hash_password(salt, value):
-    hash_value = f"{salt}/{value}"
-    return sha256(hash_value.encode("utf-8")).hexdigest()
-
-
-def mk_user_session_hash(user_id, user_ip, salt):
-    hash_value = f"{user_id}/{user_ip}/{salt}"
-    log.debug(f"mk_user_session_hash hash_value: {hash_value}")
-    return sha256(hash_value.encode("utf-8")).hexdigest()
 
 
 def request_session_vars(request):
@@ -36,11 +27,6 @@ def request_session_vars(request):
 
 
 async def check_request_session(request):
-    try:
-        return request.app["user_id"]
-    except KeyError:
-        pass
-
     user_id, user_ip, user_session_hash = request_session_vars(request)
     if user_session_hash is None or user_id is None:
         log.warning(f"missing session vars: user_id:{user_id}"
@@ -60,9 +46,9 @@ async def check_request_session(request):
         db_session["user_id"], db_session["user_ip"], db_session["salt"])
     user_session_hash_check = mk_user_session_hash(
         user_id, user_ip, db_session["salt"])
-    log.debug(f"server_session_hash: {server_session_hash}")
-    log.debug(f"user_session_hash_check: {user_session_hash_check}")
-    log.debug(f"user_session_hash: {user_session_hash}")
+    log.debug(f"server_session_hash: {server_session_hash}"
+              f", user_session_hash_check: {user_session_hash_check}"
+              f", user_session_hash: {user_session_hash}")
     is_valid_session = (
         server_session_hash
         == user_session_hash_check
@@ -81,26 +67,28 @@ async def check_user_perm(request, scope):
         db, storage.UserPerm.user_id == user_id, limit=-1)
     user_scopes = set(it["scope"] for it in user_perms)
     log.debug(f"check user perms: '{scope}' in {user_scopes}")
+    if "*" in user_scopes:
+        return
     if scope not in user_scopes:
         raise web.HTTPUnauthorized()
 
 
-@routes.post("/api/login")
+@routes.post("/login")
 async def handle_login(request):
     body = await request.json()
-    user_mail = body.get("user_mail")
-    user_password = body.get("user_password")
-    if user_mail is None or user_password is None:
-        raise web.HTTPUnauthorized()
+    storage.login_validator(None, body, "login")
     password_hash = hash_password(
         request.app["config"]["main"]["password_salt"],
-        user_password)
+        body["password"])
     db = request.app["db"]
     user = await user_store.find_one(
-        db, storage.User.mail == user_mail
-        and storage.User.password_hash == password_hash)
+        db,
+        Criterion.all([
+            storage.User.mail == body["username"],
+            storage.User.password_hash == password_hash
+        ]))
     if user is None:
-        log.warning(f"failed login attempt: {user_mail}")
+        log.warning(f"failed login attempt: {body['username']}")
         raise web.HTTPUnauthorized()
 
     user_session = dict(
@@ -114,6 +102,24 @@ async def handle_login(request):
     log.debug(f"new session hash: {server_session_hash}")
     await user_session_store.remove_all(db, storage.UserSession.user_id == user["id"])
     await user_session_store.create(db, user_session)
+    response = web.json_response(user, dumps=json_dumps)
+    response.set_cookie("u", user["id"], path="/", max_age=60 * 60 * 24)
+    response.set_cookie("s", server_session_hash, path="/",
+                        max_age=60 * 60 * 24)
+    return response
+
+
+@routes.post("/login_session")
+async def handle_login_session(request):
+    user_id = await check_request_session(request)
+    user = await user_store.find_id(request.app["db"], user_id)
+    user_session = await user_session_store.find_one(
+        request.app["db"],
+        storage.UserSession.user_id == user_id
+    )
+    server_session_hash = mk_user_session_hash(
+        user_session["user_id"], user_session["user_ip"], user_session["salt"]
+    )
     response = web.json_response(user, dumps=json_dumps)
     response.set_cookie("u", user["id"], path="/", max_age=60 * 60 * 24)
     response.set_cookie("s", server_session_hash, path="/",
