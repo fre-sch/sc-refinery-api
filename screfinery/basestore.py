@@ -2,7 +2,8 @@ import logging
 from collections import defaultdict
 from pypika import Query, functions as func, Order
 
-log = logging.getLogger("screfinery.basestore")
+
+log = logging.getLogger(__name__)
 
 
 def scalar_group(key: str) -> callable:
@@ -57,10 +58,10 @@ class BaseStore:
         total_count = await self.count_by(db, criteria)
         query = (
             Query.from_(self.table)
-                .select("*")
-                .where(criteria)
-                .offset(offset)
-                .limit(limit)
+            .select("*")
+            .where(criteria)
+            .offset(offset)
+            .limit(limit)
         )
         query = self.appy_sort(query, sort)
         query_str = str(query)
@@ -72,13 +73,7 @@ class BaseStore:
         return total_count, items
 
     async def find_id(self, db, resource_id):
-        query_str = str(self.find_one_query(
-            self.primary_key == resource_id
-        ))
-        log.debug(f"BaseStore.find_id {query_str}")
-        async with db.execute(query_str) as cursor:
-            resource = await cursor.fetchone()
-        return resource
+        return await self.find_one(db, self.primary_key == resource_id)
 
     async def create(self, db, data):
         keys = []
@@ -112,8 +107,8 @@ class BaseStore:
     async def remove_id(self, db, resource_id):
         query_str = str(
             Query.from_(self.table)
-                .delete()
-                .where(self.primary_key == resource_id)
+            .delete()
+            .where(self.primary_key == resource_id)
         )
         log.debug(f"BaseStore.remove_id {query_str}")
         await db.execute(query_str)
@@ -130,8 +125,8 @@ class BaseStore:
     async def count_by(self, db, criteria):
         query_str = str(
             Query.from_(self.table)
-                .select(func.Count("*"))
-                .where(criteria)
+            .select(func.Count("*"))
+            .where(criteria)
         )
         log.debug(f"BaseStore.count_by {query_str}")
         async with db.execute(query_str) as cursor:
@@ -139,19 +134,24 @@ class BaseStore:
             return row[0]
 
     async def query_rows_grouped(self, db, query_str, row_keys, group_keys):
+        async with db.execute(query_str) as cursor:
+            rows = await cursor.fetchall()
+            items = self.group_rows(row_keys, group_keys, rows)
+        return items
+
+    def group_rows(self, row_keys, group_keys, rows):
         ids = list()
         values = defaultdict(dict)
-        async with db.execute(query_str) as cursor:
-            async for row in cursor:
-                if row["id"] not in ids:
-                    ids.append(row["id"])
-                values[row["id"]].update(
-                    (key, row[key]) for key in row_keys
-                )
-                for item_key, group_fn in group_keys:
-                    group = values[row["id"]].setdefault(item_key, [])
-                    group_value = group_fn(row)
-                    if group_value is not None:
-                        group.append(group_value)
-        items = [values[id] for id in ids]
-        return items
+        for row in rows:
+            row_id = row["id"]
+            if row_id not in ids:
+                ids.append(row_id)
+            values[row_id].update(
+                (key, row[key]) for key in row_keys
+            )
+            for item_key, group_fn in group_keys:
+                group = values[row_id].setdefault(item_key, [])
+                group_value = group_fn(row)
+                if group_value is not None:
+                    group.append(group_value)
+        return [values[id] for id in ids]

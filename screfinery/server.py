@@ -5,15 +5,15 @@ from aiohttp import web
 import logging
 import traceback
 
-from pypika import Query, Table
+from pypika import Query
 
-import screfinery.validation
-from screfinery.auth import routes as auth_routes
 from screfinery import storage
-
+from screfinery.storage import table
+from screfinery.auth import routes as auth_routes
 from screfinery.util import parse_args, configure_app, json_dumps
 from screfinery import google_signin
 from screfinery.resourcehandler import ResourceHandler, RelResourceHandler
+from screfinery.validation import InvalidDataError
 
 log = logging.getLogger()
 routes = web.RouteTableDef()
@@ -32,30 +32,32 @@ async def init(request):
         "ores": list(),
         "methods": list()
     }
-    query = str(Query.from_(storage.Station).select("*"))
+    query = str(Query.from_(table.Station).select("*"))
     async with db.execute(query) as cursor:
         async for row in cursor:
             result["stations"].append(row)
 
-    query = str(Query.from_(storage.Ore).select("*"))
+    query = str(Query.from_(table.Ore).select("*"))
     async with db.execute(query) as cursor:
         async for row in cursor:
             result["ores"].append(row)
 
     query = str(
-        Query.from_(storage.Method)
+        Query.from_(table.Method)
         .select(
-            storage.Method.id.as_("method_id"),
-            storage.Method.name.as_("method_name"),
-            storage.Ore.id.as_("ore_id"),
-            storage.Ore.name.as_("ore_name"),
-            storage.MethodOre.efficiency.as_("method_efficiency"),
-            storage.MethodOre.cost.as_("method_cost")
+            table.Method.id.as_("method_id"),
+            table.Method.name.as_("method_name"),
+            table.Ore.id.as_("ore_id"),
+            table.Ore.name.as_("ore_name"),
+            table.MethodOre.efficiency.as_("method_efficiency"),
+            table.MethodOre.cost.as_("method_cost")
         )
-        .left_join(storage.MethodOre)
-        .on(storage.MethodOre.method_id == storage.Method.id)
-        .left_join(storage.Ore)
-        .on(storage.MethodOre.ore_id == storage.Ore.id)
+        .left_join(table.MethodOre)
+        .on(
+            table.MethodOre.method_id == table.Method.id)
+        .left_join(table.Ore)
+        .on(
+            table.MethodOre.ore_id == table.Ore.id)
     )
     log.debug(query)
     async with db.execute(query) as cursor:
@@ -75,7 +77,7 @@ async def error_middleware(request, handler):
         status_code = response.status
     except web.HTTPException as ex:
         raise
-    except screfinery.validation.InvalidDataError as ex:
+    except InvalidDataError as ex:
         message = {
             "status": "invalid",
             "invalid": ex.errors
@@ -114,13 +116,14 @@ async def init_app(args):
         RelResourceHandler.factory("/user_perm", storage.UserPermStore(), rel_column="user_id")
     )
     app.add_routes(
-        ResourceHandler.factory("/station", storage.StationStore(), storage.station_validate)
+        ResourceHandler.factory("/station", storage.StationStore(),
+                                storage.station_validate)
     )
     app.add_routes(
         ResourceHandler.factory("/ore", storage.OreStore())
     )
     app.add_routes(
-        ResourceHandler.factory("/method", storage.MethodStore())
+        ResourceHandler.factory("/method", storage.MethodStore(), storage.method_validate)
     )
     cors = aiohttp_cors.setup(app, defaults={
         "*": aiohttp_cors.ResourceOptions(

@@ -20,7 +20,8 @@ CREATE TABLE "user" (
 	"is_active"     INTEGER NOT NULL DEFAULT '0',
 	"password_hash" TEXT NOT NULL DEFAULT '',
 	"created"   	REAL NOT NULL DEFAULT (DATETIME('now', 'localtime')),
-	"updated"	    REAL NOT NULL DEFAULT (DATETIME('now', 'localtime'))
+	"updated"	    REAL NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+	"last_login"    REAL NOT NULL DEFAULT (DATETIME('now', 'localtime'))
 );
 CREATE TABLE "user_perm" (
 	"user_id"	INTEGER NOT NULL,
@@ -80,10 +81,12 @@ CREATE TABLE "station_ore" (
 CREATE TABLE "mining_session" (
 	"id"    	    INTEGER PRIMARY KEY AUTOINCREMENT,
 	"name"	        TEXT NOT NULL,
-	"is_open"       INTEGER NOT NULL DEFAULT '0',
+	"is_archived"   INTEGER NOT NULL DEFAULT '0',
 	"created"   	REAL NOT NULL DEFAULT (DATETIME('now', 'localtime')),
 	"updated"	    REAL NOT NULL DEFAULT (DATETIME('now', 'localtime')),
-	"closed"	    REAL NOT NULL DEFAULT (DATETIME('now', 'localtime'))
+	"archived"	    REAL NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+	"yield_scu"     REAL NOT NULL DEFAULT '0',
+	"yield_uec"     REAL NOT NULL DEFAULT '0',
 );
 CREATE TABLE "mining_session_user" (
 	"mining_session_id"	    INTEGER NOT NULL,
@@ -109,6 +112,17 @@ CREATE TABLE "mining_session_entry" (
 	FOREIGN KEY("station_id") REFERENCES "station"("id"),
 	FOREIGN KEY("ore_id") REFERENCES "ore"("id"),
 	FOREIGN KEY("method_id") REFERENCES "method"("id")
+);
+CREATE TABLE "mining_session_balance" (
+    "mining_session_id"     INTEGER NOT NULL,
+    "sender_user_id"        INTEGER NOT NULL,
+    "recipient_user_id"     INTEGER NOT NULL,
+    "outstanding_amount"    INTEGER NOT NULL,
+    "is_paid":              INTEGER NOT NULL,
+    "created"	            REAL NOT NULL DEFAULT (DATETIME('now', 'localtime')),
+    FOREIGN KEY("mining_session_id") REFERENCES "mining_session"("id"),
+	FOREIGN KEY("sender_user_id") REFERENCES "user"("id"),
+	FOREIGN KEY("recipient_user_id") REFERENCES "user"("id"),
 );
 
 INSERT INTO "user" ("name", "mail") VALUES ('admin', 'admin@screfinery.local');

@@ -8,7 +8,7 @@ from screfinery.auth import check_user_perm
 from screfinery.util import json_dumps
 
 
-log = logging.getLogger("screfinery.resourcehandler")
+log = logging.getLogger(__name__)
 
 
 def _default_validate(data, case):

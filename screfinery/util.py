@@ -11,7 +11,7 @@ import aiosqlite
 from jsonschema import ValidationError
 
 
-log = logging.getLogger("screfinery.util")
+log = logging.getLogger(__name__)
 
 
 def parse_cookie_header(value):
