@@ -19,7 +19,6 @@ ore_validate = _resource_validator("ore", {
                 "minLength": 1
             }
         },
-        "additionalProperties": False,
         "required": ["name"]
     }),
     "update": Draft7Validator({
@@ -29,7 +28,6 @@ ore_validate = _resource_validator("ore", {
                 "type": "string",
                 "minLength": 1
             }
-        },
-        "additionalProperties": False,
+        }
     })
 })

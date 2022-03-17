@@ -120,10 +120,13 @@ async def init_app(args):
                                 storage.station_validate)
     )
     app.add_routes(
-        ResourceHandler.factory("/ore", storage.OreStore())
+        ResourceHandler.factory("/ore", storage.OreStore(), storage.ore_validate)
     )
     app.add_routes(
         ResourceHandler.factory("/method", storage.MethodStore(), storage.method_validate)
+    )
+    app.add_routes(
+        ResourceHandler.factory("/mining_session", storage.MiningSessionStore(), storage.mining_session_validate)
     )
     cors = aiohttp_cors.setup(app, defaults={
         "*": aiohttp_cors.ResourceOptions(
