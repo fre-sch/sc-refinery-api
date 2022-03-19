@@ -8,3 +8,5 @@ __pycache__
 config.ini
 *.sqlite3
 *.db
+*-shm
+*-wal
