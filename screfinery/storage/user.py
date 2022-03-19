@@ -1,10 +1,11 @@
 import logging
+from datetime import datetime
 
 from jsonschema import Draft7Validator
-from pypika import Query
+from pypika import Query, functions as fn
 
 from screfinery.basestore import BaseStore, scalar_group
-from screfinery.storage.table import User, UserPerm
+from screfinery.storage.table import User, UserPerm, DateTime
 from screfinery.util import first, hash_password
 from screfinery.validation import InvalidDataError, schema_validate, \
     _resource_validator
@@ -17,7 +18,7 @@ class UserStore(BaseStore):
     def __init__(self):
         super().__init__(User)
 
-    row_keys = ("id", "name", "mail", "created", "updated")
+    row_keys = ("id", "name", "mail", "is_active", "is_google", "created", "updated", "last_login")
     row_groups = (
         ("scopes", scalar_group("scope"), ),
     )
@@ -25,10 +26,13 @@ class UserStore(BaseStore):
     async def find_one(self, db, criteria):
         query = (
             Query.from_(self.table)
-                .select(User.star, UserPerm.scope)
-                .left_join(UserPerm)
-                .on(UserPerm.user_id == User.id)
-                .where(criteria)
+            .select(
+                User.star,
+                UserPerm.scope
+            )
+            .left_join(UserPerm)
+            .on(UserPerm.user_id == User.id)
+            .where(criteria)
         )
         query_str = str(query)
         log.debug(f"UserStore.find_one {query_str}")
@@ -39,7 +43,16 @@ class UserStore(BaseStore):
         total_count = await self.count_by(db, criteria)
         user_query = (
             Query.from_(User)
-            .select(User.id, User.mail, User.name, User.created, User.updated)
+            .select(
+                User.id,
+                User.mail,
+                User.name,
+                User.is_active,
+                User.is_google,
+                User.created,
+                User.updated,
+                User.last_login
+            )
             .where(criteria)
             .offset(offset)
             .limit(limit)
@@ -49,7 +62,17 @@ class UserStore(BaseStore):
             Query.from_(user_alias)
             .left_join(UserPerm)
             .on(user_alias.id == UserPerm.user_id)
-            .select(User.id, User.mail, User.name, User.created, User.updated, UserPerm.scope)
+            .select(
+                User.id,
+                User.mail,
+                User.name,
+                User.is_active,
+                User.is_google,
+                DateTime(User.created).as_("created"),
+                DateTime(User.updated).as_("updated"),
+                DateTime(User.last_login).as_("last_login"),
+                UserPerm.scope
+            )
             .where(criteria)
         )
         query = self.appy_sort(query, sort)
@@ -79,6 +102,8 @@ class UserStore(BaseStore):
         await db.commit()
 
     async def update_id(self, db, resource_id, data):
+        data.pop("created", None)
+        data["updated"] = datetime.now()
         scopes = data.pop("scopes", [])
         await self.update_scopes(db, resource_id, scopes)
         return await super().update_id(db, resource_id, data)
@@ -183,6 +208,9 @@ def user_validator(config, data, case):
                     "type": "string",
                     "minLength": 1
                 },
+                "is_active": {
+                    "type": "boolean"
+                }
             },
             "required": ["name", "mail", "password", "password_confirm"]
         }), "user", data)
@@ -210,6 +238,9 @@ def user_validator(config, data, case):
                 },
                 "password_confirm": {
                     "type": ["string", "null"]
+                },
+                "is_active": {
+                    "type": "boolean"
                 }
             }
         }), "user", data)
