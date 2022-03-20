@@ -11,10 +11,9 @@ from screfinery.validation import InvalidDataError
 
 
 async def init_db(config):
-    use_db = config["main"].get("use_db")
-    if use_db == "sqlite":
-        db_path = config["sqlite"]["db_path"]
-        db = await aiosqlite.connect(db_path)
+    db_url = config["db"].get("url")
+    if db_url.startswith("sqlite"):
+        db = await aiosqlite.connect(db_url)
         db.row_factory = aiosqlite.Row
         return db
 
@@ -23,10 +22,7 @@ async def db_create_user(config, user_data):
     db = await init_db(config)
     user_store = storage.UserStore()
 
-    try:
-        user_ = await user_store.create(db, user_data)
-    except:
-        return
+    user_ = await user_store.create(db, user_data)
 
     if user_ is not None:
         click.echo(f"user {user_['id']} created")
@@ -46,18 +42,15 @@ async def db_delete_user(config, user_id, user_mail):
         click.echo(f"user ({user_['id']}, {user_['mail']}) deleted")
     else:
         click.echo(f"no such user ({user_['id']}, {user_['mail']})")
+    await db.close()
 
 
 def run_async(coroutine):
     loop = asyncio.get_event_loop()
     try:
         loop.run_until_complete(coroutine)
-    except KeyboardInterrupt:
-        loop.stop()
-        loop.close()
     finally:
-        loop.stop()
-        loop.close()
+        pass
 
 
 @click.group()

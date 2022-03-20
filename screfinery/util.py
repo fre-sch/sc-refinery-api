@@ -6,6 +6,7 @@ from functools import partial
 from hashlib import sha256
 from pathlib import Path
 from configparser import ConfigParser
+from urllib.parse import urlparse
 
 import aiosqlite
 from jsonschema import ValidationError
@@ -43,24 +44,42 @@ def load_google_certs(path):
         return json.load(fp)
 
 
-async def init_sqlite_db(app):
-    db_path = app["config"]["sqlite"]["db_path"]
-    db = await aiosqlite.connect(db_path)
+def db_connect(config):
+    if "db" not in config:
+        raise Exception("missing [db] section in config")
+
+    db_url = config["db"].get("url")
+    if not db_url:
+        raise Exception("missing [db] url in config")
+
+    if db_url.startswith("sqlite"):
+        return sqlite_connect(db_url)
+
+    raise NotImplementedError(f"`{db_url}` not implemented")
+
+
+async def sqlite_connect(url):
+    db_url = urlparse(url)
+    db = await aiosqlite.connect(db_url.netloc)
     db.row_factory = aiosqlite.Row
-    app["db"] = db
-    yield
-    await db.close()
+    return db
+
+
+def app_db_context(connect):
+    async def inner(app):
+        app["db"] = await connect
+        yield
+        await app["db"].close()
+    return inner
 
 
 async def configure_app(app, args):
     app["config"] = load_config(args.config_path)
     app["google_certs"] = load_google_certs(
         app["config"]["google"]["certs_path"])
-    use_db = app["config"]["main"].get("use_db")
-    if use_db == "sqlite":
-        app.cleanup_ctx.append(init_sqlite_db)
-    else:
-        raise NotImplementedError(f"{use_db} not implemented")
+
+    configured_db = db_connect(app["config"])
+    app.cleanup_ctx.append(app_db_context(configured_db))
 
 
 def first(itr):
