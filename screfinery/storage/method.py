@@ -3,7 +3,7 @@ import logging
 from jsonschema import Draft7Validator
 from pypika import Query
 
-from screfinery.basestore import BaseStore, item_group
+from screfinery.basestore import BaseStore, group_rel_many, group_rows, group_init
 from screfinery.storage.table import Method, MethodOre, Ore
 from screfinery.util import first
 from screfinery.validation import _resource_validator
@@ -16,10 +16,10 @@ class MethodStore(BaseStore):
     def __init__(self):
         super().__init__(Method)
 
-    row_keys = ("id", "name", "created", "updated")
-    row_groups = (
-        ("ores", item_group("ore_id", "ore_name", "efficiency", "cost", "duration"),),
-    )
+    row_groups = staticmethod(group_rows(
+        group_init(lambda row: row["id"], "id", "name", "created", "updated"),
+        group_rel_many("ores", "ore_id", "ore_name", "efficiency", "cost", "duration"),
+    ))
 
     async def find_one(self, db, criteria):
         query = (
@@ -43,7 +43,7 @@ class MethodStore(BaseStore):
         )
         query_str = str(query)
         log.debug(f"MethodStore.find_one {query_str}")
-        items = await self.query_rows_grouped(db, query_str, self.row_keys, self.row_groups)
+        items = await self.query_rows_grouped(db, query_str, self.row_groups)
         return first(items)
 
     async def find_all(self, db, criteria=None, sort=None, offset=0, limit=10):
@@ -75,10 +75,10 @@ class MethodStore(BaseStore):
             )
             .where(criteria)
         )
-        join_query = self.appy_sort(join_query, sort)
+        join_query = self.apply_sort(join_query, sort)
         query_str = str(join_query)
         log.debug(f"MethodStore.find_all {query_str}")
-        items = await self.query_rows_grouped(db, query_str, self.row_keys, self.row_groups)
+        items = await self.query_rows_grouped(db, query_str, self.row_groups)
         return total_count, items
 
     async def update_ores(self, db, resource_id, values):

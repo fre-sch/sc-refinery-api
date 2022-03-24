@@ -1,23 +1,57 @@
 import logging
-from collections import defaultdict
-from pypika import Query, functions as func, Order
+from collections import OrderedDict
 
+from pypika import Query, functions as func, Order
 
 log = logging.getLogger(__name__)
 
 
-def scalar_group(key: str) -> callable:
-    def inner(row):
-        return row[key]
-    return inner
+def group_rows(init_fn, *grouping_fns):
+    def _group_rows(rows):
+        groups = OrderedDict()
+        for row in rows:
+            group = init_fn(groups, row)
+            for fn in grouping_fns:
+                fn(group, row)
+        return list(groups.values())
+    return _group_rows
 
 
-def item_group(*keys) -> callable:
-    def inner(row):
-        has_values = any((key in row.keys() and row[key] is not None) for key in keys)
-        if has_values:
-            return {key: row[key] for key in keys}
-    return inner
+def group_init(id_fn, *keys):
+    def _group_init(groups, row):
+        row_id = id_fn(row)
+        groups.setdefault(row_id, dict()).update(
+            (key, row[key]) for key in keys
+        )
+        return groups[row_id]
+    return _group_init
+
+
+def group_rel_many_scalar(group_key, key):
+    def _group_rel_many_scalar(group: dict, row: dict):
+        value = row[key]
+        group_value = group.setdefault(group_key, list())
+        if value is None:
+            return
+        group_value.append(row[key])
+    return _group_rel_many_scalar
+
+
+def group_rel_one(group_key, *keys):
+    def _group_rel_one(group: dict, row: dict):
+        value = {key: row[key] for key in keys if row[key] is not None}
+        group[group_key] = value
+    return _group_rel_one
+
+
+def group_rel_many(group_key, *keys):
+    def _group_rel_many(group: dict, row: dict):
+        value = {key: row[key] for key in keys}
+        group_value = group.setdefault(group_key, list())
+        if all(row[key] is None for key in keys):
+            return
+        group_value.append(value)
+    return _group_rel_many
 
 
 class BaseStore:
@@ -40,7 +74,7 @@ class BaseStore:
             .limit(1)
         )
 
-    def appy_sort(self, query, sort):
+    def apply_sort(self, query, sort):
         if sort is not None:
             for key, value in sort.items():
                 sort_dir = Order.asc if value == "asc" else Order.desc
@@ -63,7 +97,7 @@ class BaseStore:
             .offset(offset)
             .limit(limit)
         )
-        query = self.appy_sort(query, sort)
+        query = self.apply_sort(query, sort)
         query_str = str(query)
         log.debug(f"BaseStore.find_all {query_str}")
         items = []
@@ -133,25 +167,8 @@ class BaseStore:
             row = await cursor.fetchone()
             return row[0]
 
-    async def query_rows_grouped(self, db, query_str, row_keys, group_keys):
+    async def query_rows_grouped(self, db, query_str, group_fn):
         async with db.execute(query_str) as cursor:
             rows = await cursor.fetchall()
-            items = self.group_rows(row_keys, group_keys, rows)
+        items = group_fn(rows)
         return items
-
-    def group_rows(self, row_keys, group_keys, rows):
-        ids = list()
-        values = defaultdict(dict)
-        for row in rows:
-            row_id = row["id"]
-            if row_id not in ids:
-                ids.append(row_id)
-            values[row_id].update(
-                (key, row[key]) for key in row_keys
-            )
-            for item_key, group_fn in group_keys:
-                group = values[row_id].setdefault(item_key, [])
-                group_value = group_fn(row)
-                if group_value is not None:
-                    group.append(group_value)
-        return [values[id] for id in ids]

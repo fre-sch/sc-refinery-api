@@ -4,7 +4,7 @@ from datetime import datetime
 from jsonschema import Draft7Validator
 from pypika import Query, functions as fn
 
-from screfinery.basestore import BaseStore, scalar_group
+from screfinery.basestore import BaseStore, group_rel_many_scalar, group_init, group_rows
 from screfinery.storage.table import User, UserPerm, DateTime
 from screfinery.util import first, hash_password
 from screfinery.validation import InvalidDataError, schema_validate, \
@@ -18,16 +18,27 @@ class UserStore(BaseStore):
     def __init__(self):
         super().__init__(User)
 
-    row_keys = ("id", "name", "mail", "is_active", "is_google", "created", "updated", "last_login")
-    row_groups = (
-        ("scopes", scalar_group("scope"), ),
-    )
+    row_groups = staticmethod(group_rows(
+        group_init(
+            lambda row: row["id"],
+            "id", "name", "mail", "is_active", "is_google", "created",
+            "updated", "last_login"
+        ),
+        group_rel_many_scalar("scopes", "scope")
+    ))
 
     async def find_one(self, db, criteria):
         query = (
             Query.from_(self.table)
             .select(
-                User.star,
+                User.id,
+                User.mail,
+                User.name,
+                User.is_active,
+                User.is_google,
+                DateTime(User.created).as_("created"),
+                DateTime(User.updated).as_("updated"),
+                DateTime(User.last_login).as_("last_login"),
                 UserPerm.scope
             )
             .left_join(UserPerm)
@@ -36,7 +47,7 @@ class UserStore(BaseStore):
         )
         query_str = str(query)
         log.debug(f"UserStore.find_one {query_str}")
-        items = await self.query_rows_grouped(db, query_str, self.row_keys, self.row_groups)
+        items = await self.query_rows_grouped(db, query_str, self.row_groups)
         return first(items)
 
     async def find_all(self, db, criteria=None, sort=None, offset=0, limit=10):
@@ -49,9 +60,9 @@ class UserStore(BaseStore):
                 User.name,
                 User.is_active,
                 User.is_google,
-                User.created,
-                User.updated,
-                User.last_login
+                DateTime(User.created).as_("created"),
+                DateTime(User.updated).as_("updated"),
+                DateTime(User.last_login).as_("last_login")
             )
             .where(criteria)
             .offset(offset)
@@ -75,10 +86,10 @@ class UserStore(BaseStore):
             )
             .where(criteria)
         )
-        query = self.appy_sort(query, sort)
+        query = self.apply_sort(query, sort)
         query_str = str(query)
         log.debug(f"BaseStore.find_all {query_str}")
-        items = await self.query_rows_grouped(db, query_str, self.row_keys, self.row_groups)
+        items = await self.query_rows_grouped(db, query_str, self.row_groups)
         return total_count, items
 
     async def update_scopes(self, db, resource_id, scopes):

@@ -1,4 +1,4 @@
-from pypika import Table
+from pypika import Table, Case
 from pypika.functions import Function
 
 
@@ -11,8 +11,14 @@ Method = Table("method")
 MethodOre = Table("method_ore")
 StationOre = Table("station_ore")
 MiningSession = Table("mining_session")
+MiningSessionUser = Table("mining_session_user")
+MiningSessionEntry = Table("mining_session_entry")
 
 
 class DateTime(Function):
     def __init__(self, term, alias=None):
         super().__init__("DATETIME", term, alias=alias)
+
+
+def DateTimeOpt(field, alias):
+    return Case().when(field != None, DateTime(field)).else_(None).as_(alias)

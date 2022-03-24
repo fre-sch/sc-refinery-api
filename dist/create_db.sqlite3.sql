@@ -82,12 +82,11 @@ CREATE TABLE "mining_session" (
 	"id"    	    INTEGER PRIMARY KEY AUTOINCREMENT,
 	"creator_id"    INTEGER NULL,
 	"name"	        TEXT NOT NULL,
-	"is_archived"   INTEGER NOT NULL DEFAULT '0',
 	"created"   	REAL NOT NULL DEFAULT (julianday('now', 'localtime')),
 	"updated"	    REAL NOT NULL DEFAULT (julianday('now', 'localtime')),
-	"archived"	    REAL NOT NULL DEFAULT (julianday('now', 'localtime')),
-	"yield_scu"     REAL NOT NULL DEFAULT '0',
-	"yield_uec"     REAL NOT NULL DEFAULT '0',
+	"archived"	    REAL NULL,
+	"yield_scu"     REAL NULL,
+	"yield_uec"     REAL NULL,
 	FOREIGN KEY ("creator_id") REFERENCES "user"("id") ON DELETE SET NULL
 );
 CREATE TABLE "mining_session_user" (
