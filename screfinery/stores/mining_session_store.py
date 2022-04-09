@@ -6,17 +6,18 @@ from sqlalchemy.orm import Session, joinedload, contains_eager, aliased
 
 from screfinery import schema
 from screfinery.stores.model import MiningSession, MiningSessionUser, User
-from screfinery.util import first
+
 
 resource_name = "mining_session"
 
 
 def get_by_id(db: Session, session_id: int) -> MiningSession:
-    main_query = db.query(MiningSession).filter(MiningSession.id == session_id).subquery()
-    return first(
+    main_query = (
         db.query(MiningSession)
-        .all()
+        .filter(MiningSession.id == session_id)
+        .subquery()
     )
+    return main_query.first()
 
 
 def list_all(db: Session, offset: int, limit: int) -> tuple[int, list[MiningSession]]:
@@ -24,9 +25,7 @@ def list_all(db: Session, offset: int, limit: int) -> tuple[int, list[MiningSess
         db.query(MiningSession).count(),
         db.query(MiningSession)
         .join(MiningSession.creator)
-        .options(
-            contains_eager(MiningSession.creator)
-        )
+        .options(contains_eager(MiningSession.creator))
         .limit(limit)
         .offset(offset)
         .all()

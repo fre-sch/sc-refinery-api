@@ -1,5 +1,11 @@
-from configparser import ConfigParser
+import logging
+from fnmatch import fnmatch
 from hashlib import sha256
+
+from screfinery.stores.model import User
+
+
+log = logging.getLogger("screfinery")
 
 
 def parse_dict_str(value: str, itemsep=";", kvsep=":") -> dict:
@@ -33,3 +39,19 @@ def hash_password(salt, value):
     hash_value = f"{salt}/{value}"
     return sha256(hash_value.encode("utf-8")).hexdigest()
 
+
+def is_authorized(scopes: list[str], required_scope: str) -> bool:
+    return any(
+        fnmatch(required_scope, scope)
+        for scope in scopes
+    )
+
+
+def is_user_authorized(user: User, required_scope: str) -> bool:
+    user_scopes = [it.scope for it in user.scopes]
+    return is_authorized(user_scopes, required_scope)
+
+
+class obj:
+    def __init__(self, **attrs):
+        self.__dict__.update(attrs)

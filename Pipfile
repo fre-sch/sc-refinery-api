@@ -4,12 +4,15 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-fastapi = "*"
-uvicorn = "*"
-sqlalchemy = "*"
-pyyaml = "*"
+fastapi = "~=0.75.1"
+uvicorn = "~=0.17.6"
+sqlalchemy = "~=1.4.0"
+pyyaml = "~=6.0"
+google-auth = "~=2.6.0"
+click = "~=8.1.2"
+python-multipart = "~=0.0.5"
 
 [dev-packages]
 
 [requires]
-python_version = "3.9"
+python_version = "3.8"

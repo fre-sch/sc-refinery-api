@@ -99,6 +99,17 @@ class UserUpdate(BaseModel):
         return value
 
 
+class UserQuery(BaseModel):
+    id: Optional[int]
+    name: Optional[str]
+    mail: Optional[constr(regex=r"^[^@]+@[^@]+$")]
+    is_google: Optional[bool]
+    is_active: Optional[bool]
+    created: Optional[datetime]
+    updated: Optional[datetime]
+    last_login: Optional[datetime]
+
+
 class Related(BaseModel):
     """
     Generic model for N:M relations

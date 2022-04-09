@@ -1,25 +1,43 @@
 """
 HTTP endpoints for `user_store`
 """
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request, status
 
-import screfinery.util
+from screfinery.util import hash_password, is_user_authorized, obj
 from screfinery import schema
-from screfinery.dependency import use_config, use_db, verify_user_session
-from screfinery.crud_router_factory import crud_router_factory, \
+from screfinery.dependency import use_config, use_db, verify_user_session, \
+    verify_user_session
+from screfinery.crud_routing import crud_router_factory, \
     RouteDef, EndpointsDef
-from screfinery.routes import auth
 from screfinery.stores import user_store
+from sqlalchemy.orm import Session
 
 
-def update_user(request: Request, resource_id: int, user: schema.UserUpdate,
-                db=Depends(use_db), config=Depends(use_config)) -> schema.User:
+def authorize(user, scope, item=None):
+    if item is not None and user.id == item.id:
+        return True
+
+    if not is_user_authorized(user, scope):
+        raise HTTPException(status.HTTP_403_FORBIDDEN)
+
+
+def create_user(item: schema.UserCreate, db: Session = Depends(use_db),
+                config=Depends(use_config)):
+    return user_store.create_one(db, item, config.app.password_salt)
+
+
+def update_user(resource_id: int, user: schema.UserUpdate,
+                db=Depends(use_db), config=Depends(use_config),
+                user_session=Depends(verify_user_session)) -> schema.User:
+    authorize(user_session.user, "user.update", obj(id=resource_id))
     if user.password_confirm:
-        user.password = screfinery.util.hash_password(user.password_confirm, config.main.password_salt)
+        user.password = hash_password(config.app.password_salt,
+                                      user.password_confirm)
     db_user = user_store.update_by_id(db, resource_id, user)
     if db_user is None:
-        raise HTTPException(status_code=404,
-                            detail=f"{user_store.resource_name} for id `{resource_id}` not found")
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail=f"{user_store.resource_name} for id `{resource_id}` not found")
     return db_user
 
 
@@ -28,25 +46,28 @@ user_routes = crud_router_factory(
     EndpointsDef(
         list=RouteDef(
             request_model=None,
-            response_model=schema.ListResponse[schema.User]
+            response_model=schema.ListResponse[schema.User],
+            authorize=authorize,
         ),
         read=RouteDef(
             request_model=None,
-            response_model=schema.User
+            response_model=schema.User,
+            authorize=authorize,
         ),
         create=RouteDef(
             request_model=schema.UserCreate,
-            response_model=schema.User
+            response_model=schema.User,
+            custom_handler_func=create_user,
         ),
         update=RouteDef(
-            request_model=None,
-            response_model=None,
+            request_model=schema.UserUpdate,
+            response_model=schema.User,
             custom_handler_func=update_user
         ),
         delete=RouteDef(
             request_model=None,
-            response_model=None
+            response_model=None,
+            authorize=authorize,
         )
-    ),
-    dependencies=[Depends(verify_user_session)]
+    )
 )

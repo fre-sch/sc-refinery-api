@@ -1,0 +1,51 @@
+app:
+  db:
+    url: sqlite:///app.db
+    ### setting echo to true will add a custom handler to echo queries, and this
+    ### handler cannot be configured sensibly.
+    # echo: true
+    ### sqlite
+    connect_args:
+      check_same_thread: false
+
+  ### enable google signup/logins by setting the following
+  # google:
+  #  client_id: str
+  #  certs_path: str
+
+  ### random string used in password hashing, for example generated with
+  ### from uuid import uuid4; print(str(uuid4()))
+  password_salt: salt
+  ### auth router returns these on GET /default_scopes
+  ### they are intended to be used by the client to determine scopes on creating
+  ### new users
+  user_default_scopes:
+    - user.read
+    - user.list
+    - station.read
+    - station.list
+    - ore.read
+    - ore.list
+    - method.read
+    - method.list
+    - mining_session.*
+
+### see https://docs.python.org/3/library/logging.config.html#logging-config-dictschema
+logging:
+  version: 1
+  # disable_existing_loggers: true
+  formatters:
+    default:
+      format: "%(levelname)s - %(name)s - %(pathname)s:%(lineno)s - %(message)s"
+  handlers:
+    default:
+      class: logging.StreamHandler
+      formatter: default
+      stream: ext://sys.stdout
+  loggers:
+    sqlalchemy.engine.Engine:
+      level: INFO
+      handler: default
+  root:
+    level: DEBUG
+    handlers: [default]

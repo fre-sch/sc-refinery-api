@@ -1,13 +1,11 @@
 import logging
-from fnmatch import fnmatch
 
 from fastapi import Request, Depends, HTTPException
 from sqlalchemy.orm import Session
 from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN
 
-from screfinery.util import parse_cookie_header
 from screfinery.stores import user_store
-
+from screfinery.util import parse_cookie_header, is_user_authorized
 
 log = logging.getLogger(__name__)
 
@@ -31,24 +29,15 @@ def use_config(request: Request):
         pass
 
 
-def verify_scopes(required_scope: str):
-    def verify_scopes_inner(request: Request):
-        user_session = getattr(request.state, "user_session", None)
-        if user_session is None:
-            raise HTTPException(status_code=401)
-
-        has_access = any(
-            fnmatch(scope.scope, required_scope)
-            for scope in user_session.user.scopes
-        )
-        if not has_access:
-            raise HTTPException(HTTP_403_FORBIDDEN)
-    return verify_scopes_inner
-
-
 def verify_user_session(request: Request, db: Session = Depends(use_db)):
-    session = _request_verify_user_session(request, db)
-    request.state.user_session = session
+    user_session = _request_verify_user_session(request, db)
+    if user_session is None:
+        raise HTTPException(HTTP_401_UNAUTHORIZED)
+    request.state.user_session = user_session
+    try:
+        yield user_session
+    finally:
+        pass
 
 
 def _cookie_session_vars(request: Request):

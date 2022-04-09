@@ -1,8 +1,27 @@
+"""
+## API for SC Refinery app, a web app for managing team mining in Star Citizen.
+
+Requests require successful authorization using /login and appropriate permissions.
+
+Permissions are based on resource name and action. For example to list all
+``station`` or fetch one ``station``, permission ``station.read`` is required.
+
+Additionally, some resources are _owned_ by a user. The user owning these
+resources always has full access to them.
+
+Actions are: ``read``, ``create``, ``update``, ``delete``.
+
+In place of a resource or action, wildcard ``*`` can be used like: ``*`` to
+give full access to everything, ``user.*`` to all access to just the resource
+``user``, ``*.read`` to allow read access to all resources.
+
+"""
+
 from fastapi import FastAPI
 from pydantic import ValidationError
 from starlette.requests import Request
 
-from screfinery import db
+from screfinery import db, version
 from screfinery.errors import IntegrityError
 from screfinery.routes.user import user_routes
 from screfinery.routes.station import station_routes
@@ -17,11 +36,12 @@ import os
 
 from screfinery.config import load_config
 
+
 app = FastAPI(
     title="SC Refinery",
-    description="API for SC Refinery app, a web app for managing team mining "
-                " in Star Citizen.",
-    version="0.1.0",
+    description=__doc__,
+    version=version.version,
+    debug=True
 )
 
 app.include_router(user_routes)
@@ -36,7 +56,7 @@ app.include_router(auth_routes)
 async def startup():
     config_path = os.environ["CONFIG_PATH"]
     app.state.config = load_config(config_path)
-    engine, SessionLocal = db.init(app.state.config.app)
+    engine, SessionLocal = db.init(app.state.config.app.db)
     app.state.db_engine = engine
     app.state.db_session = SessionLocal
 

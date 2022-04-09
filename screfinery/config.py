@@ -29,7 +29,7 @@ def load_config(path: str) -> Config:
     config = Config.parse_obj(config_dict)
     if config.logging is not None:
         dictConfig(config.logging)
-    if config.app.google.certs_path:
+    if config.app.google and config.app.google.certs_path:
         with open(config.app.google.certs_path, "r") as fp:
             config.app.google.certs = json.load(fp)
     return config

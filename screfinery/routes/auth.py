@@ -1,16 +1,17 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Form
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Request, Form, status
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy.orm import Session
-from starlette.status import HTTP_401_UNAUTHORIZED
+from fastapi.responses import JSONResponse, RedirectResponse
 from google.auth import jwt
+from sqlalchemy.orm import Session
 
 from screfinery import schema
-from screfinery.dependency import use_db, use_config
+from screfinery.dependency import use_db, use_config, verify_user_session, \
+    verify_user_session
 from screfinery.stores import user_store
 from screfinery.util import hash_password, parse_cookie_header
+
 
 log = logging.getLogger(__name__)
 ONE_DAY = 60 * 60 * 24
@@ -26,10 +27,10 @@ def login(request: Request,
     Given a username and password, create a user session and respond with user
     and cookies ``u`` (user's id) and ``s`` (session hash).
     """
-    password_hash = hash_password(login.password, config.main.password_salt)
+    password_hash = hash_password(config.app.password_salt, login.password)
     user = user_store.find_by_credentials(db, login.username, password_hash)
     if user is None:
-        raise HTTPException(status_code=401)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
     user_session, session_hash = user_store.create_session(db, user, request.client.host)
     response = JSONResponse(
@@ -41,19 +42,39 @@ def login(request: Request,
     return response
 
 
-@auth_routes.post("/google_signin", tags=["user"])
+@auth_routes.post("/logout", tags=["user"])
+def logout(request: Request,
+           db: Session = Depends(use_db),
+           user_session=Depends(verify_user_session)):
+    user_store.delete_session(db, user_session)
+    response = JSONResponse("/")
+    response.delete_cookie("u", path="/")
+    response.delete_cookie("s", path="/")
+    return response
+
+
+@auth_routes.post("/google_signin", tags=["user"], response_class=RedirectResponse)
 def google_signin(request: Request,
-                  g_csrf_token: Form(...),
-                  credential: Form(...),
-                  config: Depends(use_config)):
+                  g_csrf_token: str = Form(...),
+                  credential: str = Form(...),
+                  config=Depends(use_config)):
+    """
+    Expects cookie ``g_csrf_token`` to be set.
+    Expects configuration ``google.client_id`` and ``google.certs_path`` to be set.
+    """
     cookies = parse_cookie_header(request.headers.get("cookie"))
     cookie_g_csrf_token = cookies.get("g_csrf_token")
     if not g_csrf_token or cookie_g_csrf_token is None or cookie_g_csrf_token != g_csrf_token:
-        raise HTTPException(HTTP_401_UNAUTHORIZED)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
     id_info = jwt.decode(credential,
                          certs=config.app.google.certs,
                          audience=config.app.google.client_id)
     if id_info is None:
-        raise HTTPException(HTTP_401_UNAUTHORIZED)
-    # redirect "/"
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED)
+    return "/"
+
+
+@auth_routes.get("/default_scopes", tags=["user"])
+def default_scopes(config=Depends(use_config)):
+    return config.app.user_default_scopes

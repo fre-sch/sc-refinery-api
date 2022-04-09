@@ -1,11 +1,10 @@
 from dataclasses import dataclass
 from typing import Optional, Callable, Type
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
-from starlette.status import HTTP_404_NOT_FOUND
 
-from screfinery.dependency import use_db, verify_scopes
+from screfinery.dependency import use_db, verify_user_session
 from screfinery.types import Store
 
 
@@ -14,6 +13,7 @@ class RouteDef:
     request_model: Optional[Type]
     response_model: Optional[Type]
     custom_handler_func: Optional[Callable] = None
+    authorize: Optional[Callable] = None
 
 
 @dataclass
@@ -32,7 +32,7 @@ def crud_router_factory(store: Store, endpoints: EndpointsDef,
     a resource store
 
     Example:
-        >>> from screfinery.crud_router_factory import crud_router_factory
+        >>> from screfinery.crud_routing import crud_router_factory
         >>> router = crud_router_factory(
         ...     user_store
         ...     EndpointsDef(
@@ -72,12 +72,14 @@ def setup_route_list(routes: APIRouter, route_def: RouteDef, store: Store):
         return
 
     response_model = route_def.response_model
-    require_scope = verify_scopes(f"{store.resource_name}.list")
 
     @routes.get("/", response_model=response_model, tags=tags)
     def list_resource(offset: int = 0, limit: int = 10,
                       db: Session = Depends(use_db),
-                      is_authorized: bool = Depends(require_scope)):
+                      user_session=Depends(verify_user_session)):
+        if route_def.authorize is not None:
+            route_def.authorize(user_session.user,
+                                f"{store.resource_name}.list")
         total_count, items = store.list_all(db, offset, limit)
         return response_model(total_count=total_count, items=items)
 
@@ -94,16 +96,17 @@ def setup_route_read(routes: APIRouter, route_def: RouteDef, store: Store):
             response_model=route_def.response_model, tags=tags)
         return
 
-    require_scope = verify_scopes(f"{store.resource_name}.read")
-
     @routes.get("/{resource_id}",
                 response_model=route_def.response_model, tags=tags)
     def read_resource(resource_id: int, db: Session = Depends(use_db),
-                      is_authorized: bool = Depends(require_scope)):
+                      user_session=Depends(verify_user_session)):
         item = store.get_by_id(db, resource_id)
+        if route_def.authorize is not None:
+            route_def.authorize(user_session.user,
+                                f"{store.resource_name}.read", item)
         if item is None:
             raise HTTPException(
-                status_code=404,
+                status.HTTP_404_NOT_FOUND,
                 detail=f"{store.resource_name} for id `{resource_id}` not found")
         return item
 
@@ -120,12 +123,13 @@ def setup_route_create(routes: APIRouter, route_def: RouteDef, store: Store):
             response_model=route_def.response_model, tags=tags)
         return
 
-    require_scope = verify_scopes(f"{store.resource_name}.create")
-
     @routes.post("/", response_model=route_def.response_model, tags=tags)
     def create_resource(item: route_def.request_model,
                         db: Session = Depends(use_db),
-                        is_authorized: bool = Depends(require_scope)):
+                        user_session=Depends(verify_user_session)):
+        if route_def.authorize is not None:
+            route_def.authorize(user_session.user,
+                                f"{store.resource_name}.create")
         return store.create_one(db, item)
 
 
@@ -141,19 +145,21 @@ def setup_route_update(routes: APIRouter, route_def: RouteDef, store: Store):
             response_model=route_def.response_model, tags=tags)
         return
 
-    require_scope = verify_scopes(f"{store.resource_name}.update")
-
     @routes.put("/{resource_id}",
                 response_model=route_def.response_model, tags=tags)
     def update_resource(resource_id: int,
                         item: route_def.request_model,
                         db: Session = Depends(use_db),
-                        is_authorized: bool = Depends(require_scope)):
-        item = store.update_by_id(db, resource_id, item)
-        if item is None:
+                        user_session=Depends(verify_user_session)):
+        db_item = store.get_by_id(db, resource_id)
+        if db_item is None:
             raise HTTPException(
-                HTTP_404_NOT_FOUND,
+                status.HTTP_404_NOT_FOUND,
                 detail=f"{store.resource_name} for id `{resource_id}` not found")
+        if route_def.authorize is not None:
+            route_def.authorize(user_session.user,
+                                f"{store.resource_name}.update", db_item)
+        item = store.update_by_id(db, resource_id, item)
         return item
 
 
@@ -169,11 +175,17 @@ def setup_route_delete(routes: APIRouter, route_def: RouteDef, store: Store):
             response_model=route_def.response_model, tags=tags)
         return
 
-    require_scope = verify_scopes(f"{store.resource_name}.delete")
-
     @routes.delete("/{resource_id}",
                    response_model=route_def.response_model, tags=tags)
     def delete_resource(resource_id: int, db: Session = Depends(use_db),
-                        is_authorized: bool = Depends(require_scope)):
+                        user_session=Depends(verify_user_session)):
+        db_item = store.get_by_id(db, resource_id)
+        if db_item is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                detail=f"{store.resource_name} for id `{resource_id}` not found")
+        if route_def.authorize is not None:
+            route_def.authorize(user_session.user,
+                                f"{store.resource_name}.delete", db_item)
         store.delete_by_id(db, resource_id)
         return Response(status_code=204)

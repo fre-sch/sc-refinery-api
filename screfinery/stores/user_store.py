@@ -9,9 +9,11 @@ from typing import Optional
 from sqlalchemy.orm import Session, joinedload, contains_eager
 
 from screfinery import schema
+from screfinery.schema import UserQuery
 from screfinery.stores.model import User, UserScope, UserSession
 from hashlib import sha256
 
+from screfinery.util import hash_password
 
 log = logging.getLogger(__name__)
 resource_name = "user"
@@ -48,11 +50,11 @@ def _update_user_scopes(db: Session, user: User, scopes: list[str]):
         db.add(db_scope)
 
 
-def create_one(db: Session, user: schema.UserCreate) -> User:
+def create_one(db: Session, user: schema.UserCreate, password_salt: str) -> User:
     db_user = User(
         name=user.name,
-        mail=user.mail,
-        password_hash=sha256(user.password.encode("utf-8")).hexdigest(),
+        mail=user.mail.strip().lower(),
+        password_hash=hash_password(password_salt, user.password_confirm),
         is_google=user.is_google,
         is_active=user.is_active
     )
@@ -95,7 +97,7 @@ def find_by_credentials(db: Session, mail: str, password_hash: str) -> Optional[
     return (
         db.query(User)
         .options(joinedload(User.scopes))
-        .filter(User.mail == mail,
+        .filter(User.mail == mail.strip().lower(),
                 User.password_hash == password_hash,
                 User.is_active == True)
         .first()
@@ -124,8 +126,10 @@ def create_session(db: Session, user: User, user_ip: str) -> tuple[UserSession, 
 def find_session(db: Session, user_id: int) -> Optional[tuple[UserSession, str]]:
     session = (
         db.query(UserSession)
-        .options(joinedload(UserSession.user)
-        .options(joinedload(User.scopes)))
+        .options(
+            joinedload(UserSession.user)
+            .joinedload(User.scopes)
+        )
         .filter(UserSession.user_id == user_id)
         .first()
     )
@@ -133,3 +137,7 @@ def find_session(db: Session, user_id: int) -> Optional[tuple[UserSession, str]]
         return
     return session, session_hash(session.user_id, session.user_ip, session.salt)
 
+
+def delete_session(db: Session, session) -> None:
+    db.query(UserSession).filter(UserSession.user_id == session.user_id).delete()
+    db.commit()
