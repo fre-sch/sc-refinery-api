@@ -58,4 +58,8 @@ python screfinery/cli.py user create admin "email address" "admin_password" "*,a
 
 ## API Documentation
 
-Visit ``http://localhost:8000/docs`` to view the API documentation.
+Visit any of the following to view the API documentation:
+
+* ``http://localhost:8000/docs``
+* ``http://localhost:8000/redoc``
+* ``http://localhost:8000/openapi.json``

@@ -16,10 +16,10 @@ give full access to everything, ``user.*`` to all access to just the resource
 ``user``, ``*.read`` to allow read access to all resources.
 
 """
+import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from pydantic import ValidationError
-from starlette.requests import Request
 
 from screfinery import db, version
 from screfinery.errors import IntegrityError
@@ -37,6 +37,7 @@ import os
 from screfinery.config import load_config
 
 
+log = logging.getLogger("screfinery")
 app = FastAPI(
     title="SC Refinery",
     description=__doc__,
@@ -51,6 +52,11 @@ app.include_router(mining_session_routes)
 app.include_router(auth_routes)
 
 
+@app.route("/version", methods=["GET"])
+def get_version(request: Request):
+    return JSONResponse(content=version.version)
+
+
 @app.on_event("startup")
 async def startup():
     config_path = os.environ["CONFIG_PATH"]
@@ -60,6 +66,9 @@ async def startup():
                                    app.state.config.env == "dev")
     app.state.db_engine = engine
     app.state.db_session = SessionLocal
+
+    for route in app.routes:
+        log.debug(f"{','.join(route.methods)} {route.path}")
 
 
 @app.exception_handler(ValidationError)
