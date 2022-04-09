@@ -1,3 +1,7 @@
+### set env: dev to enable debug, verbose output, and database creation
+### set env to anything else to disable dev mode
+env: dev
+
 app:
   db:
     url: sqlite:///app.db

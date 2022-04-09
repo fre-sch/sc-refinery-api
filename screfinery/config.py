@@ -21,6 +21,8 @@ class AppConfig(BaseModel):
 class Config(BaseModel):
     app: AppConfig
     logging: Optional[dict] = None
+    ## set env=dev to enable debug, verbose output, and database creation
+    env: Optional[str] = "production"
 
 
 def load_config(path: str) -> Config:

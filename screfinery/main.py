@@ -40,8 +40,7 @@ from screfinery.config import load_config
 app = FastAPI(
     title="SC Refinery",
     description=__doc__,
-    version=version.version,
-    debug=True
+    version=version.version
 )
 
 app.include_router(user_routes)
@@ -56,7 +55,9 @@ app.include_router(auth_routes)
 async def startup():
     config_path = os.environ["CONFIG_PATH"]
     app.state.config = load_config(config_path)
-    engine, SessionLocal = db.init(app.state.config.app.db)
+    app.debug = app.state.config.env == "dev"
+    engine, SessionLocal = db.init(app.state.config.app.db,
+                                   app.state.config.env == "dev")
     app.state.db_engine = engine
     app.state.db_session = SessionLocal
 

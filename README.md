@@ -4,6 +4,14 @@ API for cooperative Mining Management in Star Citizen.
 See also frontend app: github.com/fre-sch/sc-refinery-app
 
 
+## Setup
+
+This is a [pipenv](https://pipenv.pypa.io/) project. After checkout run:
+
+```
+pipenv install
+```
+
 ## Configure
 
 Copy ``dist/example.config.yml`` to ``config.yml`` and edit values.

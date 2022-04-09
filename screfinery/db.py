@@ -4,10 +4,11 @@ from sqlalchemy.orm import sessionmaker
 from screfinery.stores.model import Base
 
 
-def init(config: dict) -> tuple:
+def init(config: dict, create_all=False) -> tuple:
     engine = engine_from_config(config, prefix="")
     session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    Base.metadata.create_all(bind=engine)
+    if create_all:
+        Base.metadata.create_all(bind=engine)
     return engine, session_local
 
 

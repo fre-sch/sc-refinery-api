@@ -46,7 +46,7 @@ def user_create(ctx, name, mail, password, permissions):
         is_active=True,
         scopes=[it.strip() for it in permissions.split(",")]
     )
-    _, session = db.init(config.db)
+    _, session = db.init(config.db, config.env == "dev")
 
     with session() as db_session:
         user_store.create_one(db_session, user, config.password_salt)
