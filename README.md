@@ -54,3 +54,8 @@ Create a new user:
 ```bash
 python screfinery/cli.py user create admin "email address" "admin_password" "*,admin"
 ```
+
+
+## API Documentation
+
+Visit ``http://localhost:8000/docs`` to view the API documentation.
