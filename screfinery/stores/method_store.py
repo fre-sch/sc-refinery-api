@@ -2,9 +2,9 @@
 CRUD methods for `method` objects.
 """
 
-from typing import Optional
+from typing import Optional, Tuple, List
 
-from sqlalchemy.orm import Session, joinedload, contains_eager
+from sqlalchemy.orm import Session, contains_eager
 
 from screfinery import schema
 from screfinery.errors import IntegrityError
@@ -29,8 +29,13 @@ def get_by_id(db: Session, method_id: int) -> Method:
     )
 
 
-def list_all(db: Session, offset: int, limit: int) -> tuple[int, list[Method]]:
-    main_query = db.query(Method).limit(limit).offset(offset).subquery()
+def list_all(db: Session, offset: int, limit: int) -> Tuple[int, List[Method]]:
+    main_query = (
+        db.query(Method)
+        .limit(limit if limit >= 0 else None)
+        .offset(offset)
+        .subquery()
+    )
     return (
         db.query(Method).count(),
         (
@@ -47,7 +52,7 @@ def list_all(db: Session, offset: int, limit: int) -> tuple[int, list[Method]]:
     )
 
 
-def _update_efficiencies(db: Session, method: Method, efficiencies: list[schema.MethodOreEfficiency]):
+def _update_efficiencies(db: Session, method: Method, efficiencies: List[schema.MethodOreEfficiency]):
     db.query(MethodOre).filter(MethodOre.method_id == method.id).delete()
     for efficiency in efficiencies:
         ore = db.query(Ore).filter(Ore.id == efficiency.ore_id).first()

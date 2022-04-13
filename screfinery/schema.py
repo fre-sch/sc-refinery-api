@@ -8,7 +8,7 @@ Request and response object schemas with validation
 """
 
 from datetime import datetime
-from typing import Optional, Generic, TypeVar, Any
+from typing import Optional, Generic, TypeVar, Any, List
 
 from pydantic import BaseModel, validator, confloat, constr
 from pydantic.generics import GenericModel
@@ -17,22 +17,78 @@ from pydantic.generics import GenericModel
 ItemT = TypeVar("ItemT")
 
 
+class Related(BaseModel):
+    """
+    Generic model for N:M relations
+    """
+    id: int
+    name: str
+
+    class Config:
+        orm_mode = True
+
+
 class ListResponse(GenericModel, Generic[ItemT]):
     total_count: int
-    items: list[ItemT]
+    items: List[ItemT]
 
 
 class Login(BaseModel):
-    username: str
-    password: str
+    username: constr(max_length=250)
+    password: constr(max_length=250)
 
 
 class UserScope(BaseModel):
-    scope: str
+    scope: constr(max_length=50)
     created: Optional[datetime]
 
     class Config:
         orm_mode = True
+
+
+class Friendship(BaseModel):
+    user_id: int
+    user_name: str
+    friend_id: int
+    friend_name: str
+    created: datetime
+    confirmed: Optional[datetime]
+
+    class Config:
+        orm_mode = True
+
+    @classmethod
+    def from_orm(cls, friendship: "Friendship") -> "Friendship":
+        return cls(
+            user_id=friendship.user_id,
+            user_name=friendship.user.name,
+            friend_id=friendship.friend_id,
+            friend_name=friendship.friend.name,
+            created=friendship.created,
+            confirmed=friendship.confirmed
+        )
+
+
+class FriendshipList(BaseModel):
+    friends_outgoing: List[Friendship]
+    friends_incoming: List[Friendship]
+
+    class Config:
+        orm_mode = True
+
+
+class FriendshipUpdate(BaseModel):
+    user_id: int
+    user_name: Optional[constr(max_length=50)]
+    friend_id: int
+    friend_name: Optional[constr(max_length=50)]
+    confirmed: Optional[datetime]
+    name: Optional[constr(max_length=50)]
+
+
+class FriendshipListUpdate(BaseModel):
+    friends_outgoing: Optional[List[FriendshipUpdate]]
+    friends_incoming: Optional[List[FriendshipUpdate]]
 
 
 class User(BaseModel):
@@ -47,7 +103,7 @@ class User(BaseModel):
     created: datetime
     updated: datetime
     last_login: Optional[datetime]
-    scopes: list[str]
+    scopes: List[str]
 
     class Config:
         orm_mode = True
@@ -68,13 +124,13 @@ class User(BaseModel):
 
 
 class UserCreate(BaseModel):
-    name: str
-    mail: constr(regex=r"^[^@]+@[^@]+$")
-    password: str
-    password_confirm: str
+    name: constr(max_length=50)
+    mail: constr(max_length=250, regex=r"^[^@]+@[^@]+$")
+    password: constr(max_length=250)
+    password_confirm: constr(max_length=250)
     is_google: bool
     is_active: bool
-    scopes: Optional[list[str]]
+    scopes: Optional[List[constr(max_length=50)]]
 
     @validator('password_confirm')
     def passwords_match(cls, value, values, **kwargs):
@@ -84,13 +140,13 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    name: Optional[str]
-    mail: Optional[constr(regex=r"^[^@]+@[^@]+$")]
-    password: Optional[str]
-    password_confirm: Optional[str]
+    name: Optional[constr(max_length=50)]
+    mail: Optional[constr(max_length=250, regex=r"^[^@]+@[^@]+$")]
+    password: Optional[constr(max_length=250)]
+    password_confirm: Optional[constr(max_length=250)]
     is_google: Optional[bool]
     is_active: Optional[bool]
-    scopes: Optional[list[str]]
+    scopes: Optional[List[constr(max_length=50)]]
 
     @validator('password_confirm')
     def passwords_match(cls, value, values, **kwargs):
@@ -110,17 +166,6 @@ class UserQuery(BaseModel):
     last_login: Optional[datetime]
 
 
-class Related(BaseModel):
-    """
-    Generic model for N:M relations
-    """
-    id: int
-    name: str
-
-    class Config:
-        orm_mode = True
-
-
 class Ore(BaseModel):
     """
     Response schema for results from database
@@ -135,11 +180,11 @@ class Ore(BaseModel):
 
 
 class OreCreate(BaseModel):
-    name: str
+    name: constr(max_length=50)
 
 
 class OreUpdate(BaseModel):
-    name: Optional[str]
+    name: Optional[constr(max_length=50)]
 
 
 class StationOreEfficiency(BaseModel):
@@ -167,20 +212,20 @@ class Station(BaseModel):
     name: str
     created: datetime
     updated: datetime
-    efficiencies: list[StationOreEfficiency]
+    efficiencies: List[StationOreEfficiency]
 
     class Config:
         orm_mode = True
 
 
 class StationCreate(BaseModel):
-    name: str
-    efficiencies: list[StationOreEfficiency]
+    name: constr(max_length=50)
+    efficiencies: List[StationOreEfficiency]
 
 
 class StationUpdate(BaseModel):
-    name: Optional[str]
-    efficiencies: Optional[list[StationOreEfficiency]]
+    name: Optional[constr(max_length=50)]
+    efficiencies: Optional[List[StationOreEfficiency]]
 
 
 class MethodOreEfficiency(BaseModel):
@@ -210,20 +255,20 @@ class Method(BaseModel):
     name: str
     created: datetime
     updated: datetime
-    efficiencies: list[MethodOreEfficiency]
+    efficiencies: List[MethodOreEfficiency]
 
     class Config:
         orm_mode = True
 
 
 class MethodCreate(BaseModel):
-    name: str
-    efficiencies: list[MethodOreEfficiency]
+    name: constr(max_length=50)
+    efficiencies: List[MethodOreEfficiency]
 
 
 class MethodUpdate(BaseModel):
-    name: Optional[str]
-    efficiencies: Optional[list[MethodOreEfficiency]]
+    name: Optional[constr(max_length=50)]
+    efficiencies: Optional[List[MethodOreEfficiency]]
 
 
 class MiningSessionEntry(BaseModel):
@@ -279,13 +324,13 @@ class MiningSessionListItem(BaseModel):
 
 class MiningSessionCreate(BaseModel):
     creator_id: int
-    name: str
+    name: constr(max_length=50)
 
 
 class MiningSessionUpdate(BaseModel):
-    name: Optional[str]
+    name: Optional[constr(max_length=50)]
     archived: Optional[datetime]
     yield_scu: Optional[float]
     yield_uec: Optional[float]
-    users_invited: Optional[list[Related]]
+    users_invited: Optional[List[Related]]
 

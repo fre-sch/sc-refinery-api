@@ -1,10 +1,9 @@
 """
 HTTP endpoints for `ore_store`.
 """
-from fastapi import Depends, HTTPException, status
+from fastapi import HTTPException, status
 
 from screfinery import schema
-from screfinery.dependency import verify_user_session
 from screfinery.crud_routing import crud_router_factory, \
     EndpointsDef, RouteDef
 from screfinery.stores import ore_store

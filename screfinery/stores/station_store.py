@@ -1,14 +1,13 @@
 """
 CRUD methods for `station` objects.
 """
-from typing import Optional
+from typing import Optional, Tuple, List
 
 from sqlalchemy.orm import Session, joinedload
 
 from screfinery import schema
 from screfinery.errors import IntegrityError
 from screfinery.stores.model import Station, StationOre, Ore
-
 
 resource_name = "station"
 
@@ -22,12 +21,12 @@ def get_by_id(db: Session, station_id: int) -> Station:
     )
 
 
-def list_all(db: Session, offset: int, limit: int) -> tuple[int, list[Station]]:
+def list_all(db: Session, offset: int, limit: int) -> Tuple[int, List[Station]]:
     return (
         db.query(Station).count(),
         (
             db.query(Station)
-            .limit(limit)
+            .limit(limit if limit >= 0 else None)
             .offset(offset)
             .options(joinedload(Station.efficiencies))
             .all()
@@ -35,7 +34,7 @@ def list_all(db: Session, offset: int, limit: int) -> tuple[int, list[Station]]:
     )
 
 
-def _update_efficiencies(db: Session, station: Station, efficiencies: list[schema.StationOreEfficiency]):
+def _update_efficiencies(db: Session, station: Station, efficiencies: List[schema.StationOreEfficiency]):
     db.query(StationOre).filter(StationOre.station_id == station.id).delete()
     for efficiency in efficiencies:
         ore = db.query(Ore).filter(Ore.id == efficiency.ore_id).first()

@@ -2,17 +2,16 @@
 CRUD methods for `user` objects.
 """
 import logging
+from datetime import datetime
+from hashlib import sha256
 from random import randint
 from time import time
-from typing import Optional
+from typing import Optional, List, Tuple
 
-from sqlalchemy.orm import Session, joinedload, contains_eager
+from sqlalchemy.orm import Session, joinedload, contains_eager, aliased
 
 from screfinery import schema
-from screfinery.schema import UserQuery
-from screfinery.stores.model import User, UserScope, UserSession
-from hashlib import sha256
-
+from screfinery.stores.model import User, UserScope, UserSession, Friendship
 from screfinery.util import hash_password
 
 log = logging.getLogger(__name__)
@@ -28,26 +27,30 @@ def get_by_id(db: Session, user_id: int) -> Optional[User]:
     )
 
 
-def list_all(db: Session, offset: int, limit: int) -> tuple[int, list[User]]:
+def get_by_ids(db: Session, user_ids: List[int]) -> List[User]:
+    return db.query(User).filter(User.id.in_(user_ids)).all()
+
+
+def list_all(db: Session, offset: int, limit: int) -> Tuple[int, List[User]]:
     return (
         db.query(User).count(),
         (
             db.query(User)
             .options(joinedload(User.scopes))
             .offset(offset)
-            .limit(limit)
+            .limit(limit if limit >= 0 else None)
             .all()
         )
     )
 
 
-def _update_user_scopes(db: Session, user: User, scopes: list[str]):
+def _update_user_scopes(db: Session, user: User, scopes: List[str]):
     if scopes is None:
         return
-    db.query(UserScope).filter(UserScope.user == user).delete()
-    for scope in scopes:
-        db_scope = UserScope(user=user, scope=scope)
-        db.add(db_scope)
+    user.scopes = [
+        UserScope(user=user, scope=scope)
+        for scope in scopes
+    ]
 
 
 def create_one(db: Session, user: schema.UserCreate, password_salt: str) -> User:
@@ -56,12 +59,13 @@ def create_one(db: Session, user: schema.UserCreate, password_salt: str) -> User
         mail=user.mail.strip().lower(),
         password_hash=hash_password(password_salt, user.password_confirm),
         is_google=user.is_google,
-        is_active=user.is_active
+        is_active=user.is_active,
     )
+    db_user.scopes = [
+        UserScope(user=db_user, scope=scope)
+        for scope in user.scopes
+    ]
     db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    _update_user_scopes(db, db_user, user.scopes)
     db.commit()
     db.refresh(db_user)
     return db_user
@@ -86,8 +90,12 @@ def update_by_id(db: Session, user_id: int, user: schema.UserUpdate) -> Optional
         db_user.is_google = user.is_google
     if user.password:
         db_user.password_hash = user.password
+    if user.scopes is not None:
+        db_user.scopes = [
+            UserScope(user=db_user, scope=scope)
+            for scope in user.scopes
+        ]
     log.info(f"Updating user {user}")
-    _update_user_scopes(db, db_user, user.scopes)
     db.add(db_user)
     db.commit()
     return db_user
@@ -114,8 +122,9 @@ def session_hash(user_id, user_ip, salt) -> str:
     return sha256(hash_value.encode("utf-8")).hexdigest()
 
 
-def create_session(db: Session, user: User, user_ip: str) -> tuple[UserSession, str]:
-    session_salt = int(time()) ^ randint(0, 2**32)
+def create_session(db: Session, user: User, user_ip: str) -> Tuple[UserSession, str]:
+    user.last_login = datetime.utcnow()
+    session_salt = int(time()) ^ randint(0, 2**24)
     db.query(UserSession).filter(UserSession.user_id == user.id).delete()
     user_session = UserSession(user=user, user_ip=user_ip, salt=session_salt)
     db.add(user_session)
@@ -123,7 +132,7 @@ def create_session(db: Session, user: User, user_ip: str) -> tuple[UserSession, 
     return user_session, session_hash(user.id, user_ip, session_salt)
 
 
-def find_session(db: Session, user_id: int) -> Optional[tuple[UserSession, str]]:
+def find_session(db: Session, user_id: int) -> Optional[Tuple[UserSession, str]]:
     session = (
         db.query(UserSession)
         .options(
@@ -141,3 +150,32 @@ def find_session(db: Session, user_id: int) -> Optional[tuple[UserSession, str]]
 def delete_session(db: Session, session) -> None:
     db.query(UserSession).filter(UserSession.user_id == session.user_id).delete()
     db.commit()
+
+
+def get_friendship(db: Session, user_id: int) -> User:
+    return (
+        db.query(User)
+        .options(joinedload(User.friends_outgoing))
+        .options(joinedload(User.friends_incoming))
+        .filter(User.id == user_id)
+        .first()
+    )
+
+
+def update_friendship(db: Session, user: User,
+                      friendship_list: schema.FriendshipListUpdate) -> None:
+    if friendship_list.friends_outgoing is not None:
+        user.friends_outgoing = [
+            Friendship(user=user, friend_id=it.friend_id)
+            for it in friendship_list.friends_outgoing
+        ]
+    if friendship_list.friends_incoming is not None:
+        for incoming in friendship_list.friends_incoming:
+            for it in user.friends_incoming:
+                # ignoring incoming.friend_id here and instead using user.id
+                # otherwise users could add and accept themselves into friend lists
+                if it.friend_id == user.id and it.user_id == it.user_id:
+                    it.confirmed = datetime.utcnow() if incoming.confirmed else None
+    db.add(user)
+    db.commit()
+    db.refresh(user)

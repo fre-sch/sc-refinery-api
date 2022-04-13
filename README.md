@@ -12,6 +12,9 @@ This is a [pipenv](https://pipenv.pypa.io/) project. After checkout run:
 pipenv install
 ```
 
+This project doesn't include additional database drivers for sqlalchemy.
+Install them as needed and preferred.
+
 ## Configure
 
 Copy ``dist/example.config.yml`` to ``config.yml`` and edit values.

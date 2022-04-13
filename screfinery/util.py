@@ -1,9 +1,9 @@
 import logging
 from fnmatch import fnmatch
 from hashlib import sha256
+from typing import List
 
 from screfinery.stores.model import User
-
 
 log = logging.getLogger("screfinery")
 
@@ -40,7 +40,7 @@ def hash_password(salt, value):
     return sha256(hash_value.encode("utf-8")).hexdigest()
 
 
-def is_authorized(scopes: list[str], required_scope: str) -> bool:
+def is_authorized(scopes: List[str], required_scope: str) -> bool:
     return any(
         fnmatch(required_scope, scope)
         for scope in scopes

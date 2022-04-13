@@ -7,11 +7,9 @@ from google.auth import jwt
 from sqlalchemy.orm import Session
 
 from screfinery import schema
-from screfinery.dependency import use_db, use_config, verify_user_session, \
-    verify_user_session
+from screfinery.dependency import use_db, use_config, verify_user_session
 from screfinery.stores import user_store
 from screfinery.util import hash_password, parse_cookie_header
-
 
 log = logging.getLogger(__name__)
 ONE_DAY = 60 * 60 * 24
@@ -42,9 +40,13 @@ def login(request: Request,
     return response
 
 
+@auth_routes.post("/login_session", response_model=schema.User, tags=["user"])
+def login_session(user_session=Depends(verify_user_session)):
+    return user_session.user
+
+
 @auth_routes.post("/logout", tags=["user"])
-def logout(request: Request,
-           db: Session = Depends(use_db),
+def logout(db: Session = Depends(use_db),
            user_session=Depends(verify_user_session)):
     user_store.delete_session(db, user_session)
     response = JSONResponse("/")

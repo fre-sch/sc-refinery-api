@@ -3,7 +3,17 @@
 env: dev
 
 app:
+  cors:
+    allow_origins:
+      ### add your allowed origins here like:
+      # - https://example-domain
+      # - http://localhost:3000
+      # - "*"
   db:
+    ### sqlalchemy configuration
+    ### see https://docs.sqlalchemy.org/en/14/core/engines.html#database-urls
+    ### this project doesn't include additional database drivers like postgresql
+    ### install them yourself if you need them
     url: sqlite:///app.db
     ### setting echo to true will add a custom handler to echo queries, and this
     ### handler cannot be configured sensibly.

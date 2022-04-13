@@ -1,6 +1,6 @@
 import json
 from logging.config import dictConfig
-from typing import Optional, Any
+from typing import Optional
 
 import yaml
 from pydantic import BaseModel
@@ -12,10 +12,16 @@ class GoogleConfig(BaseModel):
     certs: Optional[dict] = None
 
 
+class CorsConfig(BaseModel):
+    allow_origins: list[str]
+    allow_credentials: Optional[bool] = True
+
+
 class AppConfig(BaseModel):
     password_salt: str
     db: dict
     google: Optional[GoogleConfig] = None
+    cors: Optional[CorsConfig] = None
 
 
 class Config(BaseModel):

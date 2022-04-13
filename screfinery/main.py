@@ -17,24 +17,23 @@ give full access to everything, ``user.*`` to all access to just the resource
 
 """
 import logging
+import os
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
 from screfinery import db, version
+from screfinery.config import load_config, CorsConfig
 from screfinery.errors import IntegrityError
-from screfinery.routes.user import user_routes
-from screfinery.routes.station import station_routes
-from screfinery.routes.ore import ore_routes
+from screfinery.routes.auth import auth_routes
 from screfinery.routes.method import method_routes
 from screfinery.routes.mining_session import mining_session_routes
-from screfinery.routes.auth import auth_routes
-
-from fastapi.responses import JSONResponse
-from fastapi.encoders import jsonable_encoder
-import os
-
-from screfinery.config import load_config
+from screfinery.routes.ore import ore_routes
+from screfinery.routes.station import station_routes
+from screfinery.routes.user import user_routes
 
 
 log = logging.getLogger("screfinery")
@@ -43,7 +42,6 @@ app = FastAPI(
     description=__doc__,
     version=version.version
 )
-
 app.include_router(user_routes)
 app.include_router(station_routes)
 app.include_router(ore_routes)
@@ -60,12 +58,12 @@ def get_version(request: Request):
 @app.on_event("startup")
 async def startup():
     config_path = os.environ["CONFIG_PATH"]
-    app.state.config = load_config(config_path)
+    config = load_config(config_path)
+    app.state.config = config
     app.debug = app.state.config.env == "dev"
-    engine, SessionLocal = db.init(app.state.config.app.db,
-                                   app.state.config.env == "dev")
-    app.state.db_engine = engine
-    app.state.db_session = SessionLocal
+
+    _configure_cors(app, config.app.cors)
+    _configure_db(app, config.app.db, config.env == "dev")
 
     for route in app.routes:
         log.debug(f"{','.join(route.methods)} {route.path}")
@@ -90,4 +88,20 @@ def handle_integrity_error(request: Request, exc: IntegrityError):
             "status": "invalid",
             "invalid": str(exc)
         })
+    )
+
+
+def _configure_db(app: FastAPI, config: dict, debug: bool):
+    engine, session_maker = db.init(config, debug)
+    app.state.db_engine = engine
+    app.state.db_session = session_maker
+
+
+def _configure_cors(app: FastAPI, config: CorsConfig):
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=config.allow_origins,
+        allow_credentials=config.allow_credentials,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )

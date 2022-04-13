@@ -1,16 +1,18 @@
 """
 HTTP endpoints for `user_store`
 """
-from fastapi import Depends, HTTPException, Request, status
+from typing import List
 
-from screfinery.util import hash_password, is_user_authorized, obj
+from fastapi import Depends, HTTPException, status, Response
+from sqlalchemy.orm import Session
+
 from screfinery import schema
-from screfinery.dependency import use_config, use_db, verify_user_session, \
-    verify_user_session
 from screfinery.crud_routing import crud_router_factory, \
     RouteDef, EndpointsDef
+from screfinery.dependency import use_config, use_db, verify_user_session
+from screfinery.schema import Friendship
 from screfinery.stores import user_store
-from sqlalchemy.orm import Session
+from screfinery.util import hash_password, is_user_authorized, obj
 
 
 def authorize(user, scope, item=None):
@@ -71,3 +73,35 @@ user_routes = crud_router_factory(
         )
     )
 )
+
+
+@user_routes.get("/{user_id}/friendship",
+                 response_model=schema.FriendshipList, tags=["user"])
+def list_friendship(user_id: int, db: Session = Depends(use_db),
+                    user_session=Depends(verify_user_session)) -> schema.FriendshipList:
+    db_user = user_store.get_friendship(db, user_id)
+    if db_user is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail=f"{user_store.resource_name} for id `{user_id}` not found")
+    authorize(user_session.user, "user.read", db_user)
+    return schema.FriendshipList(
+        friends_outgoing=db_user.friends_outgoing,
+        friends_incoming=db_user.friends_incoming,
+    )
+
+
+@user_routes.put("/{user_id}/friendship",
+                 response_model=schema.FriendshipList, tags=["user"])
+def update_friendship(user_id: int,
+                      friendship_list: schema.FriendshipListUpdate,
+                      db: Session = Depends(use_db),
+                      user_session=Depends(verify_user_session)) -> schema.FriendshipList:
+    db_user = user_store.get_friendship(db, user_id)
+    if db_user is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail=f"{user_store.resource_name} for id `{user_id}` not found")
+    authorize(user_session.user, "user.update", db_user)
+    user_store.update_friendship(db, db_user, friendship_list)
+    return db_user

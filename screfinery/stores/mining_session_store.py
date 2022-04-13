@@ -1,12 +1,12 @@
 """
 CRUD methods for `mining_session` objects.
 """
+from typing import Tuple, List
 
-from sqlalchemy.orm import Session, joinedload, contains_eager, aliased
+from sqlalchemy.orm import Session, contains_eager
 
 from screfinery import schema
-from screfinery.stores.model import MiningSession, MiningSessionUser, User
-
+from screfinery.stores.model import MiningSession
 
 resource_name = "mining_session"
 
@@ -20,13 +20,13 @@ def get_by_id(db: Session, session_id: int) -> MiningSession:
     return main_query.first()
 
 
-def list_all(db: Session, offset: int, limit: int) -> tuple[int, list[MiningSession]]:
+def list_all(db: Session, offset: int, limit: int) -> Tuple[int, List[MiningSession]]:
     return (
         db.query(MiningSession).count(),
         db.query(MiningSession)
         .join(MiningSession.creator)
         .options(contains_eager(MiningSession.creator))
-        .limit(limit)
+        .limit(limit if limit >= 0 else None)
         .offset(offset)
         .all()
     )

@@ -17,3 +17,8 @@ def dump_schema(config: dict) -> None:
         print(sql.compile(dialect=engine.dialect))
     engine = create_engine(config["url"], strategy="mock", executor=_dump_executor)
     Base.metadata.create_all(bind=engine, checkfirst=False)
+
+
+def create_schema(config: dict) -> None:
+    engine = engine_from_config(config, prefix="")
+    Base.metadata.create_all(bind=engine)

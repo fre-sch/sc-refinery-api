@@ -1,11 +1,10 @@
 import logging
 
-from fastapi import Request, Depends, HTTPException
+from fastapi import Request, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from starlette.status import HTTP_401_UNAUTHORIZED, HTTP_403_FORBIDDEN
 
 from screfinery.stores import user_store
-from screfinery.util import parse_cookie_header, is_user_authorized
+from screfinery.util import parse_cookie_header
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ def use_config(request: Request):
 def verify_user_session(request: Request, db: Session = Depends(use_db)):
     user_session = _request_verify_user_session(request, db)
     if user_session is None:
-        raise HTTPException(HTTP_401_UNAUTHORIZED)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED)
     request.state.user_session = user_session
     try:
         yield user_session
@@ -54,12 +53,12 @@ def _request_verify_user_session(request: Request, db: Session):
         log.warning(f"missing session vars: user_id:{user_id}"
                     f", user_ip:{user_ip}"
                     f", user_session_hash:{cookie_session_hash}")
-        raise HTTPException(HTTP_401_UNAUTHORIZED)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
     db_session, db_session_hash = user_store.find_session(db, user_id)
     if db_session is None:
         log.warning(f"session not found for user_id: {user_id}")
-        raise HTTPException(HTTP_401_UNAUTHORIZED)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED)
 
     request_session_hash = user_store.session_hash(user_id, user_ip, db_session.salt)
     is_valid_session = (
@@ -67,5 +66,5 @@ def _request_verify_user_session(request: Request, db: Session):
     )
     if not is_valid_session:
         log.warning(f"session hash invalid for user_id: {user_id}")
-        raise HTTPException(HTTP_403_FORBIDDEN)
+        raise HTTPException(status.HTTP_403_FORBIDDEN)
     return db_session
