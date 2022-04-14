@@ -20,7 +20,7 @@ auth_routes = APIRouter()
 def login(request: Request,
           login: schema.Login,
           db: Session = Depends(use_db),
-          config=Depends(use_config)) -> schema.User:
+          config=Depends(use_config)) -> JSONResponse:
     """
     Given a username and password, create a user session and respond with user
     and cookies ``u`` (user's id) and ``s`` (session hash).
@@ -35,8 +35,10 @@ def login(request: Request,
         status_code=200,
         content=jsonable_encoder(schema.User.from_orm(user))
     )
-    response.set_cookie("u", user.id, path="/", max_age=ONE_DAY)
-    response.set_cookie("s", session_hash, path="/", max_age=ONE_DAY)
+    response.set_cookie("u", user.id, path="/", max_age=ONE_DAY,
+                        samesite="none", secure=True, httponly=False)
+    response.set_cookie("s", session_hash, path="/", max_age=ONE_DAY,
+                        samesite="none", secure=True, httponly=False)
     return response
 
 
