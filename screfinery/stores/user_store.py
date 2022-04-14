@@ -51,15 +51,6 @@ def list_all(db: Session,
     )
 
 
-def _update_user_scopes(db: Session, user: User, scopes: List[str]):
-    if scopes is None:
-        return
-    user.scopes = [
-        UserScope(user=user, scope=scope)
-        for scope in scopes
-    ]
-
-
 def create_one(db: Session, user: schema.UserCreate, password_salt: str) -> User:
     db_user = User(
         name=user.name,
