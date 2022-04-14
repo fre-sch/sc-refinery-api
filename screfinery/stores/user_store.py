@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session, joinedload, contains_eager, aliased
 
 from screfinery import schema
 from screfinery.stores.model import User, UserScope, UserSession, Friendship
-from screfinery.util import hash_password
+from screfinery.util import hash_password, sa_filter_from_dict, \
+    sa_order_by_from_dict
 
 log = logging.getLogger(__name__)
 resource_name = "user"
@@ -31,14 +32,20 @@ def get_by_ids(db: Session, user_ids: List[int]) -> List[User]:
     return db.query(User).filter(User.id.in_(user_ids)).all()
 
 
-def list_all(db: Session, offset: int, limit: int) -> Tuple[int, List[User]]:
+def list_all(db: Session,
+             offset: int = 0, limit: int = None,
+             filter_: dict = None, sort: dict = None) -> Tuple[int, List[User]]:
+    filter_ = sa_filter_from_dict(User, filter_)
+    order_by = sa_order_by_from_dict(User, sort)
     return (
-        db.query(User).count(),
+        db.query(User).filter(filter_).count(),
         (
             db.query(User)
+            .filter(filter_)
+            .order_by(*order_by)
             .options(joinedload(User.scopes))
             .offset(offset)
-            .limit(limit if limit >= 0 else None)
+            .limit(limit)
             .all()
         )
     )

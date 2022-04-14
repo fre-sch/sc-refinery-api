@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from screfinery import schema
 from screfinery.stores.model import Ore
+from screfinery.util import sa_filter_from_dict, sa_order_by_from_dict
 
 resource_name = "ore"
 
@@ -16,12 +17,18 @@ def get_by_id(db: Session, ore_id: int) -> Ore:
     return db.query(Ore).filter(Ore.id == ore_id).first()
 
 
-def list_all(db: Session, offset: int, limit: int) -> Tuple[int, List[Ore]]:
+def list_all(db: Session,
+             offset: int = 0, limit: int = None,
+             filter_: dict = None, sort: dict = None) -> Tuple[int, List[Ore]]:
+    filter_ = sa_filter_from_dict(Ore, filter_)
+    order_by = sa_order_by_from_dict(Ore, sort)
     return (
-        db.query(Ore).count(),
+        db.query(Ore).filter(filter_).count(),
         db.query(Ore)
+        .filter(filter_)
+        .order_by(*order_by)
         .offset(offset)
-        .limit(limit if limit >= 0 else None)
+        .limit(limit)
         .all()
     )
 

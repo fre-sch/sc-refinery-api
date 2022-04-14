@@ -231,6 +231,7 @@ class StationUpdate(BaseModel):
 class MethodOreEfficiency(BaseModel):
     efficiency: confloat(gt=0, le=1)
     duration: confloat(gt=0)
+    cost: confloat(gt=0)
     ore_id: int
     ore_name: Optional[str]
 
@@ -242,6 +243,7 @@ class MethodOreEfficiency(BaseModel):
         return cls(
             efficiency=obj.efficiency,
             duration=obj.duration,
+            cost=obj.cost,
             ore_id=obj.ore_id,
             ore_name=obj.ore.name
         )

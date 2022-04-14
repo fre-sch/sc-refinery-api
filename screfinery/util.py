@@ -3,12 +3,17 @@ from fnmatch import fnmatch
 from hashlib import sha256
 from typing import List
 
+from sqlalchemy import and_
+
 from screfinery.stores.model import User
 
 log = logging.getLogger("screfinery")
 
 
 def parse_dict_str(value: str, itemsep=";", kvsep=":") -> dict:
+    if not value:
+        return dict()
+
     items = value.split(itemsep)
 
     def _kv():
@@ -55,3 +60,21 @@ def is_user_authorized(user: User, required_scope: str) -> bool:
 class obj:
     def __init__(self, **attrs):
         self.__dict__.update(attrs)
+
+
+def sa_filter_from_dict(model, filter_: dict):
+    return and_(True, *(
+        getattr(model, key).ilike(f"{value}%")
+        for key, value in filter_.items()
+        if hasattr(model, key)
+    ))
+
+
+def sa_order_by_from_dict(model, sort: dict):
+    return [
+        getattr(model, key).desc()
+        if dir == "desc"
+        else getattr(model, key).asc()
+        for key, dir in sort.items()
+        if hasattr(model, key)
+    ]

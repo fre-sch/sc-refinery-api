@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from screfinery.dependency import use_db, verify_user_session
 from screfinery.types import Store
+from screfinery.util import parse_dict_str
 
 
 @dataclass
@@ -74,13 +75,19 @@ def setup_route_list(routes: APIRouter, route_def: RouteDef, store: Store):
     response_model = route_def.response_model
 
     @routes.get("/", response_model=response_model, tags=tags)
-    def list_resource(offset: int = 0, limit: int = 10,
+    def list_resource(offset: int = 0, limit: int = 25,
+                      filter: Optional[str] = None,
+                      sort: Optional[str] = None,
                       db: Session = Depends(use_db),
                       user_session=Depends(verify_user_session)):
         if route_def.authorize is not None:
             route_def.authorize(user_session.user,
                                 f"{store.resource_name}.list")
-        total_count, items = store.list_all(db, offset, limit)
+        filter = parse_dict_str(filter)
+        sort = parse_dict_str(sort)
+        limit = limit if limit >= 0 else None
+        total_count, items = store.list_all(
+            db, offset=offset, limit=limit, filter_=filter, sort=sort)
         return response_model(total_count=total_count, items=items)
 
 

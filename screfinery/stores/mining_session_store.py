@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, contains_eager
 
 from screfinery import schema
 from screfinery.stores.model import MiningSession
+from screfinery.util import sa_filter_from_dict, sa_order_by_from_dict
 
 resource_name = "mining_session"
 
@@ -20,13 +21,19 @@ def get_by_id(db: Session, session_id: int) -> MiningSession:
     return main_query.first()
 
 
-def list_all(db: Session, offset: int, limit: int) -> Tuple[int, List[MiningSession]]:
+def list_all(db: Session, offset: int = 0, limit: int = None,
+             filter_: dict = None, sort: dict = None,
+             ) -> Tuple[int, List[MiningSession]]:
+    filter_ = sa_filter_from_dict(MiningSession, filter_)
+    order_by = sa_order_by_from_dict(MiningSession, sort)
     return (
-        db.query(MiningSession).count(),
+        db.query(MiningSession).filter(filter_).count(),
         db.query(MiningSession)
         .join(MiningSession.creator)
         .options(contains_eager(MiningSession.creator))
-        .limit(limit if limit >= 0 else None)
+        .filter(filter_)
+        .order_by(*order_by)
+        .limit(limit)
         .offset(offset)
         .all()
     )

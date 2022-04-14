@@ -99,7 +99,8 @@ class Station(Base):
     created = Column(DateTime, nullable=False, server_default=func.now())
     updated = Column(DateTime, nullable=False, server_default=func.now())
 
-    efficiencies = relationship("StationOre", back_populates="station")
+    efficiencies = relationship("StationOre", back_populates="station",
+                                cascade="all, delete-orphan")
 
     __table_args__ = (
         {
@@ -151,7 +152,8 @@ class Method(Base):
     created = Column(DateTime, nullable=False, server_default=func.now())
     updated = Column(DateTime, nullable=False, server_default=func.now())
 
-    efficiencies = relationship("MethodOre", back_populates="method")
+    efficiencies = relationship("MethodOre", back_populates="method",
+                                cascade="all, delete-orphan")
 
     __table_args__ = (
         {
@@ -169,6 +171,7 @@ class MethodOre(Base):
                     nullable=False, primary_key=True)
     efficiency = Column(Float, nullable=False, default=0.0)
     duration = Column(Float, nullable=False, default=0.0)
+    cost = Column(Float, nullable=False, default=0.0)
 
     ore = relationship("Ore")
     method = relationship("Method", back_populates="efficiencies")
