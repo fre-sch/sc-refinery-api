@@ -19,12 +19,15 @@ give full access to everything, ``user.*`` to all access to just the resource
 import logging
 import os
 
+import pydantic
 from fastapi import FastAPI, Request, Response
 from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import ALL_METHODS, SAFELISTED_HEADERS
 from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError as SAIntegrityError
 
 from screfinery import db, version
 from screfinery.config import load_config
@@ -83,6 +86,41 @@ def handle_integrity_error(request: Request, exc: IntegrityError):
         content=jsonable_encoder({
             "status": "invalid",
             "invalid": str(exc)
+        })
+    )
+
+
+@app.exception_handler(SAIntegrityError)
+def handle_sqlalchemy_integrity_error(request: Request, exc: SAIntegrityError):
+    return JSONResponse(
+        status_code=400,
+        content=jsonable_encoder({
+            "status": "invalid",
+            "invalid": [
+                {
+                    "message": exc.args[0],
+                    "detail": exc.params
+                }
+            ]
+        })
+    )
+
+
+@app.exception_handler(RequestValidationError)
+def handle_validation_error(request: Request, exc: RequestValidationError):
+    validation_errors = exc.errors()
+    return JSONResponse(
+        status_code=400,
+        content=jsonable_encoder({
+            "status": "invalid",
+            "invalid": [
+                {
+                    "path": "/" + "/".join(str(it) for it in e["loc"][1:]),
+                    "message": e["msg"],
+                    "type": e["type"]
+                }
+                for e in validation_errors
+            ]
         })
     )
 
