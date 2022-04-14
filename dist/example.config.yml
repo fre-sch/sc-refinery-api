@@ -3,12 +3,6 @@
 env: dev
 
 app:
-  cors:
-    allow_origins:
-      ### add your allowed origins here like:
-      # - https://example-domain
-      # - http://localhost:3000
-      # - "*"
   db:
     ### sqlalchemy configuration
     ### see https://docs.sqlalchemy.org/en/14/core/engines.html#database-urls
