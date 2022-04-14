@@ -27,7 +27,7 @@ from starlette.middleware.cors import ALL_METHODS, SAFELISTED_HEADERS
 from pydantic import ValidationError
 
 from screfinery import db, version
-from screfinery.config import load_config, CorsConfig
+from screfinery.config import load_config
 from screfinery.errors import IntegrityError
 from screfinery.routes.auth import auth_routes
 from screfinery.routes.method import method_routes
