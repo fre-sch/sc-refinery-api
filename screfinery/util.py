@@ -78,3 +78,24 @@ def sa_order_by_from_dict(model, sort: dict):
         for key, dir in sort.items()
         if hasattr(model, key)
     ]
+
+
+def format_validation_errors(validation_errors):
+    """
+    Reformat pydantic ValidationError list
+    """
+    return [
+        {
+            "path": "/" + "/".join(str(it) for it in e["loc"][1:]),
+            "message": e["msg"],
+            "type": e["type"]
+        }
+        for e in validation_errors
+    ]
+
+
+def optint(value, default=0):
+    try:
+        return int(value)
+    except:
+        return default

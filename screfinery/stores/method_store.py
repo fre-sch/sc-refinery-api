@@ -82,6 +82,7 @@ def create_one(db: Session, method: schema.MethodCreate) -> Method:
     ]
     db.add(db_method)
     db.commit()
+    db.refresh(db_method)
     return db_method
 
 
@@ -96,7 +97,9 @@ def update_by_id(db: Session, method_id: int, method: schema.MethodUpdate) -> Op
             _create_checked_method_ore_rel(db, db_method, efficiency)
             for efficiency in method.efficiencies
         ]
+    db.add(db_method)
     db.commit()
+    db.refresh(db_method)
     return db_method
 
 

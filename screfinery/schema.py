@@ -10,9 +10,10 @@ Request and response object schemas with validation
 from datetime import datetime
 from typing import Optional, Generic, TypeVar, Any, List
 
-from pydantic import BaseModel, validator, confloat, constr
+from pydantic import BaseModel, validator, confloat, constr, conint
 from pydantic.generics import GenericModel
 
+from screfinery.util import optint
 
 ItemT = TypeVar("ItemT")
 
@@ -22,7 +23,7 @@ class Related(BaseModel):
     Generic model for N:M relations
     """
     id: int
-    name: str
+    name: Optional[str]
 
     class Config:
         orm_mode = True
@@ -58,7 +59,7 @@ class Friendship(BaseModel):
         orm_mode = True
 
     @classmethod
-    def from_orm(cls, friendship: "Friendship") -> "Friendship":
+    def from_orm(cls, friendship: "screfinery.stores.model.Friendship") -> "Friendship":
         return cls(
             user_id=friendship.user_id,
             user_name=friendship.user.name,
@@ -109,7 +110,29 @@ class User(BaseModel):
         orm_mode = True
 
     @classmethod
-    def from_orm(cls, user: "User") -> "User":
+    def from_orm(cls, user: "screfinery.stores.model.User") -> "User":
+        return cls(
+            id=user.id,
+            name=user.name,
+            mail=user.mail,
+            is_google=user.is_google,
+            is_active=user.is_active,
+            created=user.created,
+            updated=user.updated,
+            last_login=user.last_login,
+            scopes=[s.scope for s in user.scopes]
+        )
+
+
+class UserWithFriends(User):
+    friends_outgoing: List[Friendship]
+    friends_incoming: List[Friendship]
+
+    class Config:
+        orm_mode = True
+
+    @classmethod
+    def from_orm(cls, user: "screfinery.stores.model.User") -> "UserWithFriends":
         return cls(
             id=user.id,
             name=user.name,
@@ -120,6 +143,8 @@ class User(BaseModel):
             updated=user.updated,
             last_login=user.last_login,
             scopes=[s.scope for s in user.scopes],
+            friends_outgoing=user.friends_outgoing,
+            friends_incoming=user.friends_incoming
         )
 
 
@@ -155,17 +180,6 @@ class UserUpdate(BaseModel):
         return value
 
 
-class UserQuery(BaseModel):
-    id: Optional[int]
-    name: Optional[str]
-    mail: Optional[constr(regex=r"^[^@]+@[^@]+$")]
-    is_google: Optional[bool]
-    is_active: Optional[bool]
-    created: Optional[datetime]
-    updated: Optional[datetime]
-    last_login: Optional[datetime]
-
-
 class Ore(BaseModel):
     """
     Response schema for results from database
@@ -188,7 +202,7 @@ class OreUpdate(BaseModel):
 
 
 class StationOreEfficiency(BaseModel):
-    efficiency_bonus: float
+    efficiency_bonus: confloat(ge=-1, le=1)
     ore_id: int
     ore_name: Optional[str]
 
@@ -229,9 +243,9 @@ class StationUpdate(BaseModel):
 
 
 class MethodOreEfficiency(BaseModel):
-    efficiency: confloat(gt=0, le=1)
-    duration: confloat(gt=0)
-    cost: confloat(gt=0)
+    efficiency: confloat(ge=0, le=1)
+    duration: confloat(ge=0)
+    cost: confloat(ge=0)
     ore_id: int
     ore_name: Optional[str]
 
@@ -287,6 +301,30 @@ class MiningSessionEntry(BaseModel):
     quantity: float
     duration: float
 
+    class Config:
+        orm_mode = True
+
+
+class MiningSessionEntryCreate(BaseModel):
+    user: Related
+    station: Related
+    ore: Related
+    method: Related
+    quantity: conint(gt=0)
+    duration: constr(regex=r"^(?:(?P<days>\d\d?)[Dd])?\s*"
+                           r"(?:(?P<hours>\d\d?)[Hh])?\s*"
+                           r"(?:(?P<minutes>\d\d?)[Mm])?$")
+
+    @validator("duration")
+    def duration_parse(cls, value, values, field, **kwargs):
+        match = field.type_.regex.match(value)
+        seconds = (
+                optint(match.group("days")) * 86400
+                + optint(match.group("hours")) * 3600
+                + optint(match.group("minutes")) * 60
+        )
+        return seconds
+
 
 class MiningSession(BaseModel):
     """
@@ -303,6 +341,47 @@ class MiningSession(BaseModel):
 
     class Config:
         orm_mode = True
+
+
+class MiningSessionInvite(BaseModel):
+    id: int
+    name: str
+    created: datetime
+
+    class Config:
+        orm_mode = True
+
+
+class MiningSessionWithUsersEntries(MiningSession):
+    users_invited: List[MiningSessionInvite]
+    entries: List[MiningSessionEntry]
+
+    class Config:
+        orm_mode = True
+
+    @classmethod
+    def from_orm(
+            cls, obj: "screfinery.stores.model.MiningSession"
+            ) -> "MiningSessionWithUsersEntries":
+        return cls(
+            id=obj.id,
+            creator=obj.creator,
+            name=obj.name,
+            created=obj.created,
+            updated=obj.updated,
+            archived=obj.archived,
+            yield_scu=obj.yield_scu,
+            yield_uec=obj.yield_uec,
+            users_invited=[
+                MiningSessionInvite(
+                    id=rel.user.id,
+                    name=rel.user.name,
+                    created=rel.created
+                )
+                for rel in obj.users_invited
+            ],
+            entries=obj.entries
+        )
 
 
 class MiningSessionListItem(BaseModel):
@@ -327,6 +406,7 @@ class MiningSessionListItem(BaseModel):
 class MiningSessionCreate(BaseModel):
     creator_id: int
     name: constr(max_length=50)
+    users_invited: List[Related]
 
 
 class MiningSessionUpdate(BaseModel):

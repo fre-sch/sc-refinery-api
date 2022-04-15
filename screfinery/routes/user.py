@@ -53,17 +53,17 @@ user_routes = crud_router_factory(
         ),
         read=RouteDef(
             request_model=None,
-            response_model=schema.User,
+            response_model=schema.UserWithFriends,
             authorize=authorize,
         ),
         create=RouteDef(
             request_model=schema.UserCreate,
-            response_model=schema.User,
+            response_model=schema.UserWithFriends,
             custom_handler_func=create_user,
         ),
         update=RouteDef(
             request_model=schema.UserUpdate,
-            response_model=schema.User,
+            response_model=schema.UserWithFriends,
             custom_handler_func=update_user
         ),
         delete=RouteDef(

@@ -19,11 +19,9 @@ give full access to everything, ``user.*`` to all access to just the resource
 import logging
 import os
 
-import pydantic
 from fastapi import FastAPI, Request, Response
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.middleware.cors import ALL_METHODS, SAFELISTED_HEADERS
 from pydantic import ValidationError
@@ -38,7 +36,7 @@ from screfinery.routes.mining_session import mining_session_routes
 from screfinery.routes.ore import ore_routes
 from screfinery.routes.station import station_routes
 from screfinery.routes.user import user_routes
-
+from screfinery.util import format_validation_errors
 
 log = logging.getLogger("screfinery")
 app = FastAPI(
@@ -71,10 +69,10 @@ async def startup():
 @app.exception_handler(ValidationError)
 def handle_validation_error(request: Request, exc: ValidationError):
     return JSONResponse(
-        status_code=400,
+        status_code=500,
         content=jsonable_encoder({
-            "status": "invalid",
-            "invalid": exc.errors()
+            "status": "error",
+            "error": format_validation_errors(exc.errors())
         })
     )
 
@@ -108,19 +106,11 @@ def handle_sqlalchemy_integrity_error(request: Request, exc: SAIntegrityError):
 
 @app.exception_handler(RequestValidationError)
 def handle_validation_error(request: Request, exc: RequestValidationError):
-    validation_errors = exc.errors()
     return JSONResponse(
         status_code=400,
         content=jsonable_encoder({
             "status": "invalid",
-            "invalid": [
-                {
-                    "path": "/" + "/".join(str(it) for it in e["loc"][1:]),
-                    "message": e["msg"],
-                    "type": e["type"]
-                }
-                for e in validation_errors
-            ]
+            "invalid": format_validation_errors(exc.errors())
         })
     )
 
@@ -154,11 +144,11 @@ app.include_router(ore_routes)
 app.include_router(method_routes)
 app.include_router(mining_session_routes)
 app.include_router(auth_routes)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["*"],
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 

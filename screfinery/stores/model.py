@@ -114,6 +114,7 @@ class Ore(Base):
 
     id = Column(Integer, nullable=False, primary_key=True)
     name = Column(Unicode(50), nullable=False, unique=True)
+    sell_price = Column(Integer, nullable=False, default=0, server_default="0")
     created = Column(DateTime, nullable=False, server_default=func.now())
     updated = Column(DateTime, nullable=False, server_default=func.now())
 
@@ -169,9 +170,9 @@ class MethodOre(Base):
                        nullable=False, primary_key=True)
     ore_id = Column(Integer, ForeignKey("ore.id", ondelete="CASCADE"),
                     nullable=False, primary_key=True)
-    efficiency = Column(Float, nullable=False, default=0.0)
-    duration = Column(Float, nullable=False, default=0.0)
-    cost = Column(Float, nullable=False, default=0.0)
+    efficiency = Column(Float, nullable=False, default=0.0, server_default="0")
+    duration = Column(Float, nullable=False, default=0.0, server_default="0")
+    cost = Column(Float, nullable=False, default=0.0, server_default="0")
 
     ore = relationship("Ore")
     method = relationship("Method", back_populates="efficiencies")
@@ -189,12 +190,12 @@ class MiningSession(Base):
     id = Column(Integer, nullable=False, primary_key=True)
     creator_id = Column(Integer, ForeignKey("user.id", ondelete="SET NULL"),
                         nullable=True)
-    name = Column(Unicode(50), nullable=False)
+    name = Column(Unicode(50), nullable=False, unique=True)
     created = Column(DateTime, nullable=False, server_default=func.now())
     updated = Column(DateTime, nullable=False, server_default=func.now())
     archived = Column(DateTime, nullable=True)
-    yield_scu = Column(Float, nullable=False, default=0.0)
-    yield_uec = Column(Float, nullable=False, default=0.0)
+    yield_scu = Column(Float, nullable=False, default=0.0, server_default="0")
+    yield_uec = Column(Float, nullable=False, default=0.0, server_default="0")
 
     creator = relationship("User", back_populates="sessions_created")
     users_invited = relationship("MiningSessionUser", back_populates="session")
@@ -236,8 +237,8 @@ class MiningSessionEntry(Base):
     station_id = Column(Integer, ForeignKey("station.id", ondelete="SET NULL"), nullable=True)
     ore_id = Column(Integer, ForeignKey("ore.id", ondelete="SET NULL"), nullable=True)
     method_id = Column(Integer, ForeignKey("method.id", ondelete="SET NULL"), nullable=True)
-    quantity = Column(Float, nullable=False, default=0.0)
-    duration = Column(Float, nullable=False, default=0.0)
+    quantity = Column(Integer, nullable=False, default=0, server_default="0")
+    duration = Column(Integer, nullable=False, default=0, server_default="0")
 
     created = Column(DateTime, nullable=False, server_default=func.now())
     updated = Column(DateTime, nullable=False, server_default=func.now())

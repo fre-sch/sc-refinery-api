@@ -46,6 +46,7 @@ def update_by_id(db: Session, ore_id: int, ore: schema.OreUpdate) -> Optional[Or
     if not db_obj:
         return
     db_obj.name = ore.name
+    db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
     return db_obj

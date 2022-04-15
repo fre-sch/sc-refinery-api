@@ -64,6 +64,7 @@ def create_one(db: Session, station: schema.StationCreate) -> Station:
     ]
     db.add(db_station)
     db.commit()
+    db.refresh(db_station)
     return db_station
 
 
@@ -78,7 +79,9 @@ def update_by_id(db: Session, station_id: int, station: schema.StationUpdate) ->
             _create_checked_station_ore_rel(db, db_station, eff)
             for eff in station.efficiencies
         ]
+    db.add(db_station)
     db.commit()
+    db.refresh(db_station)
     return db_station
 
 

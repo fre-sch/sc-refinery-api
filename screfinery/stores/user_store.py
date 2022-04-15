@@ -23,6 +23,14 @@ def get_by_id(db: Session, user_id: int) -> Optional[User]:
     return (
         db.query(User)
         .options(joinedload(User.scopes))
+        .options(
+            joinedload(User.friends_outgoing)
+            .joinedload(Friendship.friend)
+        )
+        .options(
+            joinedload(User.friends_incoming)
+            .joinedload(Friendship.user)
+        )
         .filter(User.id == user_id)
         .first()
     )
@@ -96,6 +104,7 @@ def update_by_id(db: Session, user_id: int, user: schema.UserUpdate) -> Optional
     log.info(f"Updating user {user}")
     db.add(db_user)
     db.commit()
+    db.refresh(db_user)
     return db_user
 
 
@@ -127,6 +136,7 @@ def create_session(db: Session, user: User, user_ip: str) -> Tuple[UserSession, 
     user_session = UserSession(user=user, user_ip=user_ip, salt=session_salt)
     db.add(user_session)
     db.commit()
+    db.refresh(user_session)
     return user_session, session_hash(user.id, user_ip, session_salt)
 
 
