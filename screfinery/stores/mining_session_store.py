@@ -26,7 +26,11 @@ def get_by_id(db: Session, session_id: int) -> MiningSession:
             .joinedload(MiningSessionUser.user)
         )
         .options(
-            joinedload(MiningSession.entries)
+            joinedload(MiningSession.entries).joinedload(MiningSessionEntry.station)
+            , joinedload(MiningSession.entries).joinedload(MiningSessionEntry.ore)
+            , joinedload(MiningSession.entries).joinedload(MiningSessionEntry.method)
+            , joinedload(MiningSession.entries).joinedload(MiningSessionEntry.method_eff)
+            , joinedload(MiningSession.entries).joinedload(MiningSessionEntry.station_eff)
         )
         .first()
     )
@@ -112,6 +116,13 @@ def add_entry(db: Session, db_mining_session: MiningSession,
     )
     db_mining_session.entries.append(db_entry)
     db.add(db_mining_session)
+    db.commit()
+    db.refresh(db_mining_session)
+    return db_mining_session
+
+
+def delete_entry(db: Session, db_mining_session, db_entry: MiningSessionEntry) -> MiningSession:
+    db.delete(db_entry)
     db.commit()
     db.refresh(db_mining_session)
     return db_mining_session

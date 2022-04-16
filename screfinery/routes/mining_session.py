@@ -10,13 +10,21 @@ from screfinery.crud_routing import crud_router_factory, \
 from screfinery.dependency import use_db, verify_user_session
 from screfinery.errors import IntegrityError
 from screfinery.stores import mining_session_store
-from screfinery.util import is_user_authorized
+from screfinery.util import is_user_authorized, first
 
 
 def authorize(user, scope, item=None):
-    if item is not None and item.creator_id == user.id:
-        return True
-
+    if item is not None:
+        try:
+            if item.user_id == user.id:
+                return
+        except AttributeError:
+            pass
+        try:
+            if item.creator_id == user.id:
+                return
+        except AttributeError:
+            pass
     if not is_user_authorized(user, scope):
         raise HTTPException(status.HTTP_403_FORBIDDEN)
 
@@ -74,4 +82,26 @@ def mining_session_create_entry(
             f"User `{entry.user.id}` is not invited to mining session `{resource_id}`")
 
     db_mining_session = mining_session_store.add_entry(db, db_mining_session, entry)
+    return db_mining_session
+
+
+@mining_session_routes.delete("/{resource_id}/entry/{entry_id}",
+                              tags=["mining_session"],
+                              response_model=schema.MiningSessionWithUsersEntries)
+def mining_session_delete_entry(
+        resource_id: int, entry_id: int,
+        db: Session = Depends(use_db), user_session = Depends(verify_user_session)
+        ) -> schema.MiningSessionWithUsersEntries:
+    db_mining_session = mining_session_store.get_by_id(db, resource_id)
+    if db_mining_session is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail=f"mining_session for id `{resource_id}` not found")
+    db_entry = first(
+        entry for entry in db_mining_session.entries
+        if entry.id == entry_id
+    )
+    authorize(user_session.user, "mining_session.delete", db_entry)
+    db_mining_session = mining_session_store.delete_entry(
+        db, db_mining_session, db_entry)
     return db_mining_session

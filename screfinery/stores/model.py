@@ -3,8 +3,9 @@ Database schema
 """
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, Unicode, \
-    DateTime, func, UniqueConstraint, Float, select
+    DateTime, func, UniqueConstraint, Float, select, and_
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship, column_property
 
 Base = declarative_base()
@@ -245,9 +246,35 @@ class MiningSessionEntry(Base):
 
     session = relationship("MiningSession", back_populates="entries")
     station = relationship("Station")
+    station_eff = relationship(StationOre,
+                               viewonly=True,
+                               foreign_keys=[ore_id, station_id],
+                               primaryjoin=and_(
+                                   ore_id == StationOre.ore_id,
+                                   station_id == StationOre.station_id
+                               ))
     ore = relationship("Ore")
     method = relationship("Method")
+    method_eff = relationship(MethodOre,
+                              viewonly=True,
+                              foreign_keys=[method_id, ore_id],
+                              primaryjoin=and_(
+                                  method_id == MethodOre.method_id,
+                                  ore_id == MethodOre.ore_id
+                              ))
     user = relationship("User", back_populates="entries")
+
+    @hybrid_property
+    def cost(self):
+        return self.quantity * self.method_eff.cost
+
+    @hybrid_property
+    def profit(self):
+        return self.quantity * (
+            self.method_eff.efficiency
+            + self.station_eff.efficiency_bonus
+        ) * self.ore.sell_price - self.cost
+
 
     __table_args__ = (
         {
@@ -261,6 +288,7 @@ MiningSession.entries_count = column_property(
         .where(MiningSessionEntry.session_id == MiningSession.id)
         .correlate_except(MiningSessionEntry)
         .scalar_subquery()
+        .label("entries_count")
     )
 
 MiningSession.users_invited_count = column_property(
@@ -268,4 +296,5 @@ MiningSession.users_invited_count = column_property(
         .where(MiningSessionUser.session_id == MiningSession.id)
         .correlate_except(MiningSessionUser)
         .scalar_subquery()
+        .label("users_invited_count")
     )

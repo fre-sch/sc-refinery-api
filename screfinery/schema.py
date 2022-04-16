@@ -10,10 +10,11 @@ Request and response object schemas with validation
 from datetime import datetime
 from typing import Optional, Generic, TypeVar, Any, List
 
-from pydantic import BaseModel, validator, confloat, constr, conint
+from pydantic import BaseModel, validator, confloat, constr, conint, \
+    root_validator
 from pydantic.generics import GenericModel
 
-from screfinery.util import optint
+from screfinery.util import optint, first
 
 ItemT = TypeVar("ItemT")
 
@@ -186,6 +187,7 @@ class Ore(BaseModel):
     """
     id: int
     name: str
+    sell_price: int
     created: datetime
     updated: datetime
 
@@ -195,10 +197,12 @@ class Ore(BaseModel):
 
 class OreCreate(BaseModel):
     name: constr(max_length=50)
+    sell_price: int
 
 
 class OreUpdate(BaseModel):
     name: Optional[constr(max_length=50)]
+    sell_price: Optional[int]
 
 
 class StationOreEfficiency(BaseModel):
@@ -300,6 +304,11 @@ class MiningSessionEntry(BaseModel):
     updated: datetime
     quantity: float
     duration: float
+    profit: float
+    cost: float
+
+    method_eff: object
+    station_eff: object
 
     class Config:
         orm_mode = True

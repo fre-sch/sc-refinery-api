@@ -34,7 +34,10 @@ def list_all(db: Session,
 
 
 def create_one(db: Session, ore: schema.OreCreate) -> Optional[Ore]:
-    db_obj = Ore(name=ore.name)
+    db_obj = Ore(
+        name=ore.name,
+        sell_price=ore.sell_price
+    )
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
@@ -45,7 +48,10 @@ def update_by_id(db: Session, ore_id: int, ore: schema.OreUpdate) -> Optional[Or
     db_obj = get_by_id(db, ore_id)
     if not db_obj:
         return
-    db_obj.name = ore.name
+    if db_obj.name is not None:
+        db_obj.name = ore.name
+    if db_obj.sell_price is not None:
+        db_obj.sell_price = ore.sell_price
     db.add(db_obj)
     db.commit()
     db.refresh(db_obj)
