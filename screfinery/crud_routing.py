@@ -5,8 +5,16 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from screfinery.dependency import use_db, verify_user_session
+from screfinery.errors import NotFoundError
 from screfinery.types import Store
 from screfinery.util import parse_dict_str
+
+
+CRUD_SCOPE_LIST = "list"
+CRUD_SCOPE_READ = "read"
+CRUD_SCOPE_CREATE = "create"
+CRUD_SCOPE_UPDATE = "update"
+CRUD_SCOPE_DELETE = "delete"
 
 
 @dataclass
@@ -82,7 +90,7 @@ def setup_route_list(routes: APIRouter, route_def: RouteDef, store: Store):
                       user_session=Depends(verify_user_session)):
         if route_def.authorize is not None:
             route_def.authorize(user_session.user,
-                                f"{store.resource_name}.list")
+                                f"{store.resource_name}.{CRUD_SCOPE_LIST}")
         filter = parse_dict_str(filter)
         sort = parse_dict_str(sort)
         limit = limit if limit >= 0 else None
@@ -110,11 +118,9 @@ def setup_route_read(routes: APIRouter, route_def: RouteDef, store: Store):
         item = store.get_by_id(db, resource_id)
         if route_def.authorize is not None:
             route_def.authorize(user_session.user,
-                                f"{store.resource_name}.read", item)
+                                f"{store.resource_name}.{CRUD_SCOPE_READ}", item)
         if item is None:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail=f"{store.resource_name} for id `{resource_id}` not found")
+            raise NotFoundError(store.resource_name, resource_id)
         return item
 
 
@@ -136,7 +142,7 @@ def setup_route_create(routes: APIRouter, route_def: RouteDef, store: Store):
                         user_session=Depends(verify_user_session)):
         if route_def.authorize is not None:
             route_def.authorize(user_session.user,
-                                f"{store.resource_name}.create")
+                                f"{store.resource_name}.{CRUD_SCOPE_CREATE}")
         return store.create_one(db, item)
 
 
@@ -160,12 +166,10 @@ def setup_route_update(routes: APIRouter, route_def: RouteDef, store: Store):
                         user_session=Depends(verify_user_session)):
         db_item = store.get_by_id(db, resource_id)
         if db_item is None:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail=f"{store.resource_name} for id `{resource_id}` not found")
+            raise NotFoundError(store.resource_name, resource_id)
         if route_def.authorize is not None:
             route_def.authorize(user_session.user,
-                                f"{store.resource_name}.update", db_item)
+                                f"{store.resource_name}.{CRUD_SCOPE_UPDATE}", db_item)
         item = store.update_by_id(db, resource_id, item)
         return item
 
@@ -188,11 +192,9 @@ def setup_route_delete(routes: APIRouter, route_def: RouteDef, store: Store):
                         user_session=Depends(verify_user_session)):
         db_item = store.get_by_id(db, resource_id)
         if db_item is None:
-            raise HTTPException(
-                status.HTTP_404_NOT_FOUND,
-                detail=f"{store.resource_name} for id `{resource_id}` not found")
+            raise NotFoundError(store.resource_name, resource_id)
         if route_def.authorize is not None:
             route_def.authorize(user_session.user,
-                                f"{store.resource_name}.delete", db_item)
+                                f"{store.resource_name}.{CRUD_SCOPE_DELETE}", db_item)
         store.delete_by_id(db, resource_id)
         return Response(status_code=204)

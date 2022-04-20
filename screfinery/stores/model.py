@@ -199,7 +199,8 @@ class MiningSession(Base):
     yield_uec = Column(Float, nullable=False, default=0.0, server_default="0")
 
     creator = relationship("User", back_populates="sessions_created")
-    users_invited = relationship("MiningSessionUser", back_populates="session")
+    users_invited = relationship("MiningSessionUser", back_populates="session",
+                                 cascade="all, delete-orphan")
     entries = relationship("MiningSessionEntry", back_populates="session")
 
     __table_args__ = (

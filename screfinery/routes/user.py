@@ -10,6 +10,7 @@ from screfinery import schema
 from screfinery.crud_routing import crud_router_factory, \
     RouteDef, EndpointsDef
 from screfinery.dependency import use_config, use_db, verify_user_session
+from screfinery.errors import NotFoundError
 from screfinery.schema import Friendship
 from screfinery.stores import user_store
 from screfinery.util import hash_password, is_user_authorized, obj
@@ -37,9 +38,7 @@ def update_user(resource_id: int, user: schema.UserUpdate,
                                       user.password_confirm)
     db_user = user_store.update_by_id(db, resource_id, user)
     if db_user is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            detail=f"{user_store.resource_name} for id `{resource_id}` not found")
+        raise NotFoundError("user", resource_id)
     return db_user
 
 
@@ -81,9 +80,7 @@ def list_friendship(user_id: int, db: Session = Depends(use_db),
                     user_session=Depends(verify_user_session)) -> schema.FriendshipList:
     db_user = user_store.get_friendship(db, user_id)
     if db_user is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            detail=f"{user_store.resource_name} for id `{user_id}` not found")
+        raise NotFoundError("user", user_id)
     authorize(user_session.user, "user.read", db_user)
     return schema.FriendshipList(
         friends_outgoing=db_user.friends_outgoing,
@@ -99,9 +96,7 @@ def update_friendship(user_id: int,
                       user_session=Depends(verify_user_session)) -> schema.FriendshipList:
     db_user = user_store.get_friendship(db, user_id)
     if db_user is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            detail=f"{user_store.resource_name} for id `{user_id}` not found")
+        raise NotFoundError("user", user_id)
     authorize(user_session.user, "user.update", db_user)
     user_store.update_friendship(db, db_user, friendship_list)
     return db_user

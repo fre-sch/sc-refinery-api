@@ -121,6 +121,27 @@ def add_entry(db: Session, db_mining_session: MiningSession,
     return db_mining_session
 
 
+def update_entry(db: Session, db_mining_session: MiningSession,
+                 db_entry: MiningSessionEntry,
+                 entry_update: schema.MiningSessionEntryUpdate) -> MiningSession:
+    if entry_update.user is not None:
+        db_entry.user = _checked_rel(db, User, entry_update.user.id)
+    if entry_update.station is not None:
+        db_entry.station = _checked_rel(db, Station, entry_update.station.id)
+    if entry_update.ore is not None:
+        db_entry.ore = _checked_rel(db, Ore, entry_update.ore.id)
+    if entry_update.method is not None:
+        db_entry.method = _checked_rel(db, Method, entry_update.method.id)
+    if entry_update.quantity is not None:
+        db_entry.quantity = entry_update.quantity
+    if entry_update.duration is not None:
+        db_entry.duration = entry_update.duration
+    db.add(db_entry)
+    db.commit()
+    db.refresh(db_mining_session)
+    return db_mining_session
+
+
 def delete_entry(db: Session, db_mining_session, db_entry: MiningSessionEntry) -> MiningSession:
     db.delete(db_entry)
     db.commit()

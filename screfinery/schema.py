@@ -10,11 +10,9 @@ Request and response object schemas with validation
 from datetime import datetime
 from typing import Optional, Generic, TypeVar, Any, List
 
-from pydantic import BaseModel, validator, confloat, constr, conint, \
-    root_validator
+from pydantic import BaseModel, validator, confloat, constr, conint
 from pydantic.generics import GenericModel
 
-from screfinery.util import optint, first
 
 ItemT = TypeVar("ItemT")
 
@@ -296,19 +294,20 @@ class MiningSessionEntry(BaseModel):
     Response schema for results from database
     """
     id: int
+    session_id: int
     user: Related
     station: Related
     ore: Related
     method: Related
     created: datetime
     updated: datetime
-    quantity: float
-    duration: float
+    quantity: int
+    duration: int
     profit: float
     cost: float
 
-    method_eff: object
-    station_eff: object
+    # method_eff: object
+    # station_eff: object
 
     class Config:
         orm_mode = True
@@ -320,19 +319,16 @@ class MiningSessionEntryCreate(BaseModel):
     ore: Related
     method: Related
     quantity: conint(gt=0)
-    duration: constr(regex=r"^(?:(?P<days>\d\d?)[Dd])?\s*"
-                           r"(?:(?P<hours>\d\d?)[Hh])?\s*"
-                           r"(?:(?P<minutes>\d\d?)[Mm])?$")
+    duration: conint(ge=0)
 
-    @validator("duration")
-    def duration_parse(cls, value, values, field, **kwargs):
-        match = field.type_.regex.match(value)
-        seconds = (
-                optint(match.group("days")) * 86400
-                + optint(match.group("hours")) * 3600
-                + optint(match.group("minutes")) * 60
-        )
-        return seconds
+
+class MiningSessionEntryUpdate(BaseModel):
+    user: Optional[Related]
+    station: Optional[Related]
+    ore: Optional[Related]
+    method: Optional[Related]
+    quantity: Optional[conint(gt=0)]
+    duration: Optional[conint(ge=0)]
 
 
 class MiningSession(BaseModel):
