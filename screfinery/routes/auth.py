@@ -77,8 +77,3 @@ def google_signin(request: Request,
     if id_info is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED)
     return "/"
-
-
-@auth_routes.get("/default_scopes", tags=["user"])
-def default_scopes(config=Depends(use_config)):
-    return config.app.user_default_scopes

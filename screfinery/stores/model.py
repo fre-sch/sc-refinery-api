@@ -3,12 +3,28 @@ Database schema
 """
 
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, Unicode, \
-    DateTime, func, UniqueConstraint, Float, select, and_
+    DateTime, func, UniqueConstraint, Float, select, and_, Table
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import relationship, column_property
 
+
 Base = declarative_base()
+
+
+friendship = Table(
+    "friendship", Base.metadata,
+    Column("user_id", Integer, ForeignKey("user.id"), primary_key=True),
+    Column("friend_id", Integer, ForeignKey("user.id"), primary_key=True),
+    Column("created", DateTime, nullable=False, server_default=func.now()),
+    Column("confirmed", DateTime, nullable=True),
+)
+
+friendship_union = select([
+    friendship.c.user_id, friendship.c.friend_id
+]).union(select([
+    friendship.c.friend_id, friendship.c.user_id
+])).alias()
 
 
 class User(Base):
@@ -31,13 +47,15 @@ class User(Base):
     sessions_created = relationship("MiningSession", back_populates="creator")
     login_sessions = relationship("UserSession", back_populates="user")
 
-    friends_outgoing = relationship("Friendship", back_populates="user",
-                                    primaryjoin="User.id==Friendship.user_id",
-                                    foreign_keys="Friendship.user_id",
-                                    cascade="all, delete-orphan")
-    friends_incoming = relationship("Friendship", back_populates="user",
-                                    primaryjoin="User.id==Friendship.friend_id",
-                                    foreign_keys="Friendship.friend_id")
+    ### only those that user has directly added
+    friends = relationship("User", secondary=friendship,
+                           primaryjoin=id == friendship.c.user_id,
+                           secondaryjoin=id == friendship.c.friend_id)
+    ### those that have been directly added plus those that user has been added to
+    # all_friends = relationship("User", secondary=friendship_union,
+    #                            primaryjoin=id == friendship_union.c.user_id,
+    #                            secondaryjoin=id == friendship_union.c.friend_id,
+    #                            viewonly=True)
 
     __table_args__ = (
         {
@@ -76,20 +94,20 @@ class UserSession(Base):
     user = relationship("User", back_populates="login_sessions")
 
 
-class Friendship(Base):
-    __tablename__ = "friendship"
-
-    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"),
-                     nullable=False, primary_key=True)
-    friend_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"),
-                       nullable=False, primary_key=True)
-    created = Column(DateTime, nullable=False, server_default=func.now())
-    confirmed = Column(DateTime, nullable=True)
-
-    user = relationship("User", foreign_keys=[user_id],
-                        back_populates="friends_outgoing")
-    friend = relationship("User", foreign_keys=[friend_id],
-                          back_populates="friends_incoming")
+# class Friendship(Base):
+#     __tablename__ = "friendship"
+#
+#     user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"),
+#                      nullable=False, primary_key=True)
+#     friend_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"),
+#                        nullable=False, primary_key=True)
+#     created = Column(DateTime, nullable=False, server_default=func.now())
+#     confirmed = Column(DateTime, nullable=True)
+#
+#     user = relationship("User", foreign_keys=[user_id],
+#                         back_populates="friends_outgoing")
+#     friend = relationship("User", foreign_keys=[friend_id],
+#                           back_populates="friends_incoming")
 
 
 class Station(Base):

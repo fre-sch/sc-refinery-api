@@ -144,11 +144,3 @@ app.include_router(ore_routes)
 app.include_router(method_routes)
 app.include_router(mining_session_routes)
 app.include_router(auth_routes)
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"],
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-# )
-

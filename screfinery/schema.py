@@ -14,6 +14,18 @@ from pydantic import BaseModel, validator, confloat, constr, conint
 from pydantic.generics import GenericModel
 
 
+ADMIN_SCOPES = {"*",}
+USER_SCOPES = {
+    "user.read",
+    "user.list",
+    "station.read",
+    "station.list",
+    "ore.read",
+    "ore.list",
+    "method.read",
+    "method.list",
+    "mining_session.*",
+}
 ItemT = TypeVar("ItemT")
 
 
@@ -46,51 +58,6 @@ class UserScope(BaseModel):
         orm_mode = True
 
 
-class Friendship(BaseModel):
-    user_id: int
-    user_name: str
-    friend_id: int
-    friend_name: str
-    created: datetime
-    confirmed: Optional[datetime]
-
-    class Config:
-        orm_mode = True
-
-    @classmethod
-    def from_orm(cls, friendship: "screfinery.stores.model.Friendship") -> "Friendship":
-        return cls(
-            user_id=friendship.user_id,
-            user_name=friendship.user.name,
-            friend_id=friendship.friend_id,
-            friend_name=friendship.friend.name,
-            created=friendship.created,
-            confirmed=friendship.confirmed
-        )
-
-
-class FriendshipList(BaseModel):
-    friends_outgoing: List[Friendship]
-    friends_incoming: List[Friendship]
-
-    class Config:
-        orm_mode = True
-
-
-class FriendshipUpdate(BaseModel):
-    user_id: int
-    user_name: Optional[constr(max_length=50)]
-    friend_id: int
-    friend_name: Optional[constr(max_length=50)]
-    confirmed: Optional[datetime]
-    name: Optional[constr(max_length=50)]
-
-
-class FriendshipListUpdate(BaseModel):
-    friends_outgoing: Optional[List[FriendshipUpdate]]
-    friends_incoming: Optional[List[FriendshipUpdate]]
-
-
 class User(BaseModel):
     """
     Response schema for results from database
@@ -100,10 +67,10 @@ class User(BaseModel):
     mail: str
     is_google: bool
     is_active: bool
+    is_admin: bool
     created: datetime
     updated: datetime
     last_login: Optional[datetime]
-    scopes: List[str]
 
     class Config:
         orm_mode = True
@@ -116,16 +83,15 @@ class User(BaseModel):
             mail=user.mail,
             is_google=user.is_google,
             is_active=user.is_active,
+            is_admin=ADMIN_SCOPES.issubset(set(it.scope for it in user.scopes)),
             created=user.created,
             updated=user.updated,
-            last_login=user.last_login,
-            scopes=[s.scope for s in user.scopes]
+            last_login=user.last_login
         )
 
 
 class UserWithFriends(User):
-    friends_outgoing: List[Friendship]
-    friends_incoming: List[Friendship]
+    friends: List[Related]
 
     class Config:
         orm_mode = True
@@ -141,9 +107,8 @@ class UserWithFriends(User):
             created=user.created,
             updated=user.updated,
             last_login=user.last_login,
-            scopes=[s.scope for s in user.scopes],
-            friends_outgoing=user.friends_outgoing,
-            friends_incoming=user.friends_incoming
+            is_admin=ADMIN_SCOPES.issubset(set(it.scope for it in user.scopes)),
+            friends=user.friends
         )
 
 
@@ -154,9 +119,15 @@ class UserCreate(BaseModel):
     password_confirm: constr(max_length=250)
     is_google: bool
     is_active: bool
-    scopes: Optional[List[constr(max_length=50)]]
+    is_admin: bool
 
-    @validator('password_confirm')
+    @property
+    def scopes(self) -> List[str]:
+        if self.is_admin:
+            return list(ADMIN_SCOPES)
+        return list(USER_SCOPES)
+
+    @validator("password_confirm")
     def passwords_match(cls, value, values, **kwargs):
         if 'password' in values and value != values['password']:
             raise ValueError('passwords do not match')
@@ -170,11 +141,23 @@ class UserUpdate(BaseModel):
     password_confirm: Optional[constr(max_length=250)]
     is_google: Optional[bool]
     is_active: Optional[bool]
-    scopes: Optional[List[constr(max_length=50)]]
+    is_admin: Optional[bool]
+    friends: Optional[List[Related]]
 
-    @validator('password_confirm')
-    def passwords_match(cls, value, values, **kwargs):
-        if 'password' in values and value != values['password']:
+    @property
+    def scopes(self) -> List[str]:
+        if self.is_admin:
+            return list(ADMIN_SCOPES)
+        return list(USER_SCOPES)
+
+    @validator("password")
+    def password_match(cls, value, values, **kwargs):
+        if values.get("password_confirm") is None:
+            raise ValueError('password_confirm is required')
+
+    @validator("password_confirm")
+    def password_confirm_match(cls, value, values, **kwargs):
+        if value != values.get("password"):
             raise ValueError('passwords do not match')
         return value
 

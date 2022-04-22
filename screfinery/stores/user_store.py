@@ -8,10 +8,10 @@ from random import randint
 from time import time
 from typing import Optional, List, Tuple
 
-from sqlalchemy.orm import Session, joinedload, contains_eager, aliased
+from sqlalchemy.orm import Session, joinedload
 
 from screfinery import schema
-from screfinery.stores.model import User, UserScope, UserSession, Friendship
+from screfinery.stores.model import User, UserScope, UserSession
 from screfinery.util import hash_password, sa_filter_from_dict, \
     sa_order_by_from_dict
 
@@ -23,14 +23,7 @@ def get_by_id(db: Session, user_id: int) -> Optional[User]:
     return (
         db.query(User)
         .options(joinedload(User.scopes))
-        .options(
-            joinedload(User.friends_outgoing)
-            .joinedload(Friendship.friend)
-        )
-        .options(
-            joinedload(User.friends_incoming)
-            .joinedload(Friendship.user)
-        )
+        .options(joinedload(User.friends))
         .filter(User.id == user_id)
         .first()
     )
@@ -101,6 +94,10 @@ def update_by_id(db: Session, user_id: int, user: schema.UserUpdate) -> Optional
             UserScope(user=db_user, scope=scope)
             for scope in user.scopes
         ]
+    if user.friends is not None:
+        db_user.friends = db.query(User).filter(
+            User.id.in_(it.id for it in user.friends)
+        ).all()
     log.info(f"Updating user {user}")
     db.add(db_user)
     db.commit()
@@ -158,32 +155,3 @@ def find_session(db: Session, user_id: int) -> Optional[Tuple[UserSession, str]]
 def delete_session(db: Session, session) -> None:
     db.query(UserSession).filter(UserSession.user_id == session.user_id).delete()
     db.commit()
-
-
-def get_friendship(db: Session, user_id: int) -> User:
-    return (
-        db.query(User)
-        .options(joinedload(User.friends_outgoing))
-        .options(joinedload(User.friends_incoming))
-        .filter(User.id == user_id)
-        .first()
-    )
-
-
-def update_friendship(db: Session, user: User,
-                      friendship_list: schema.FriendshipListUpdate) -> None:
-    if friendship_list.friends_outgoing is not None:
-        user.friends_outgoing = [
-            Friendship(user=user, friend_id=it.friend_id)
-            for it in friendship_list.friends_outgoing
-        ]
-    if friendship_list.friends_incoming is not None:
-        for incoming in friendship_list.friends_incoming:
-            for it in user.friends_incoming:
-                # ignoring incoming.friend_id here and instead using user.id
-                # otherwise users could add and accept themselves into friend lists
-                if it.friend_id == user.id and it.user_id == it.user_id:
-                    it.confirmed = datetime.utcnow() if incoming.confirmed else None
-    db.add(user)
-    db.commit()
-    db.refresh(user)

@@ -11,7 +11,6 @@ from screfinery.crud_routing import crud_router_factory, \
     RouteDef, EndpointsDef
 from screfinery.dependency import use_config, use_db, verify_user_session
 from screfinery.errors import NotFoundError
-from screfinery.schema import Friendship
 from screfinery.stores import user_store
 from screfinery.util import hash_password, is_user_authorized, obj
 
@@ -72,31 +71,3 @@ user_routes = crud_router_factory(
         )
     )
 )
-
-
-@user_routes.get("/{user_id}/friendship",
-                 response_model=schema.FriendshipList, tags=["user"])
-def list_friendship(user_id: int, db: Session = Depends(use_db),
-                    user_session=Depends(verify_user_session)) -> schema.FriendshipList:
-    db_user = user_store.get_friendship(db, user_id)
-    if db_user is None:
-        raise NotFoundError("user", user_id)
-    authorize(user_session.user, "user.read", db_user)
-    return schema.FriendshipList(
-        friends_outgoing=db_user.friends_outgoing,
-        friends_incoming=db_user.friends_incoming,
-    )
-
-
-@user_routes.put("/{user_id}/friendship",
-                 response_model=schema.FriendshipList, tags=["user"])
-def update_friendship(user_id: int,
-                      friendship_list: schema.FriendshipListUpdate,
-                      db: Session = Depends(use_db),
-                      user_session=Depends(verify_user_session)) -> schema.FriendshipList:
-    db_user = user_store.get_friendship(db, user_id)
-    if db_user is None:
-        raise NotFoundError("user", user_id)
-    authorize(user_session.user, "user.update", db_user)
-    user_store.update_friendship(db, db_user, friendship_list)
-    return db_user
