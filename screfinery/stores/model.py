@@ -27,6 +27,16 @@ friendship_union = select([
 ])).alias()
 
 
+mining_session_user = Table(
+    "mining_session_user", Base.metadata,
+    Column("session_id", Integer, ForeignKey("mining_session.id",
+                                             ondelete="CASCADE"),
+           nullable=False, primary_key=True),
+    Column("user_id", Integer, ForeignKey("user.id", ondelete="CASCADE"),
+           nullable=False, primary_key=True),
+)
+
+
 class User(Base):
     __tablename__ = "user"
 
@@ -42,7 +52,8 @@ class User(Base):
 
     scopes = relationship("UserScope", back_populates="user",
                           cascade="all, delete-orphan")
-    sessions_invited = relationship("MiningSessionUser", back_populates="user")
+    sessions_invited = relationship("MiningSession",
+                                    secondary=mining_session_user)
     entries = relationship("MiningSessionEntry", back_populates="user")
     sessions_created = relationship("MiningSession", back_populates="creator")
     login_sessions = relationship("UserSession", back_populates="user")
@@ -92,22 +103,6 @@ class UserSession(Base):
     created = Column(DateTime, nullable=False, server_default=func.now())
 
     user = relationship("User", back_populates="login_sessions")
-
-
-# class Friendship(Base):
-#     __tablename__ = "friendship"
-#
-#     user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"),
-#                      nullable=False, primary_key=True)
-#     friend_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"),
-#                        nullable=False, primary_key=True)
-#     created = Column(DateTime, nullable=False, server_default=func.now())
-#     confirmed = Column(DateTime, nullable=True)
-#
-#     user = relationship("User", foreign_keys=[user_id],
-#                         back_populates="friends_outgoing")
-#     friend = relationship("User", foreign_keys=[friend_id],
-#                           back_populates="friends_incoming")
 
 
 class Station(Base):
@@ -217,29 +212,14 @@ class MiningSession(Base):
     yield_uec = Column(Float, nullable=False, default=0.0, server_default="0")
 
     creator = relationship("User", back_populates="sessions_created")
-    users_invited = relationship("MiningSessionUser", back_populates="session",
-                                 cascade="all, delete-orphan")
+    # users_invited = relationship("MiningSessionUser", back_populates="session",
+    #                              cascade="all, delete-orphan")
+    #
+    users_invited = relationship("User", secondary=mining_session_user,
+                                 primaryjoin=id == mining_session_user.c.session_id,
+                                 back_populates="sessions_invited")
+
     entries = relationship("MiningSessionEntry", back_populates="session")
-
-    __table_args__ = (
-        {
-            "sqlite_autoincrement": True
-        },
-    )
-
-
-class MiningSessionUser(Base):
-    __tablename__ = "mining_session_user"
-
-    session_id = Column(Integer,
-                        ForeignKey("mining_session.id", ondelete="CASCADE"),
-                        nullable=False, primary_key=True)
-    user_id = Column(Integer, ForeignKey("user.id", ondelete="CASCADE"),
-                     nullable=False, primary_key=True)
-    created = Column(DateTime, nullable=False, server_default=func.now())
-
-    user = relationship("User", back_populates="sessions_invited")
-    session = relationship("MiningSession", back_populates="users_invited")
 
     __table_args__ = (
         {
@@ -294,7 +274,6 @@ class MiningSessionEntry(Base):
             + self.station_eff.efficiency_bonus
         ) * self.ore.sell_price - self.cost
 
-
     __table_args__ = (
         {
             "sqlite_autoincrement": True
@@ -311,9 +290,9 @@ MiningSession.entries_count = column_property(
     )
 
 MiningSession.users_invited_count = column_property(
-        select([func.count(MiningSessionUser.user_id)])
-        .where(MiningSessionUser.session_id == MiningSession.id)
-        .correlate_except(MiningSessionUser)
+        select([func.count(mining_session_user.c.user_id)])
+        .where(mining_session_user.c.session_id == MiningSession.id)
+        .correlate_except(mining_session_user)
         .scalar_subquery()
         .label("users_invited_count")
     )

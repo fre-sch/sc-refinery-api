@@ -6,7 +6,8 @@ from sqlalchemy.orm import Session
 
 from screfinery import schema
 from screfinery.crud_routing import crud_router_factory, \
-    EndpointsDef, RouteDef, CRUD_SCOPE_CREATE, CRUD_SCOPE_UPDATE, CRUD_SCOPE_DELETE
+    EndpointsDef, RouteDef, CRUD_SCOPE_CREATE, CRUD_SCOPE_UPDATE, \
+    CRUD_SCOPE_DELETE, CRUD_SCOPE_READ
 from screfinery.dependency import use_db, verify_user_session
 from screfinery.errors import IntegrityError, NotFoundError
 from screfinery.stores import mining_session_store
@@ -129,3 +130,18 @@ def mining_session_delete_entry(
     db_mining_session = mining_session_store.delete_entry(
         db, db_mining_session, db_entry)
     return db_mining_session
+
+
+@mining_session_routes.get("/{resource_id}/payout_summary",
+                           tags=["mining_session"],
+                           response_model=schema.MiningSessionPayoutSummary)
+def mining_session_payout_summary(
+        resource_id: int,
+        db: Session = Depends(use_db),
+        user_session=Depends(verify_user_session)) -> schema.MiningSessionPayoutSummary:
+    db_mining_session = mining_session_store.get_by_id(db, resource_id)
+    if db_mining_session is None:
+        raise NotFoundError("mining_session", resource_id)
+    authorize(user_session.user, f"mining_session.{CRUD_SCOPE_READ}", db_mining_session)
+
+    return mining_session_store.calc_payout_summary(db_mining_session)

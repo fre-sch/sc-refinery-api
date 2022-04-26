@@ -92,6 +92,7 @@ class User(BaseModel):
 
 class UserWithFriends(User):
     friends: List[Related]
+    sessions_invited: List[Related]
 
     class Config:
         orm_mode = True
@@ -108,7 +109,8 @@ class UserWithFriends(User):
             updated=user.updated,
             last_login=user.last_login,
             is_admin=ADMIN_SCOPES.issubset(set(it.scope for it in user.scopes)),
-            friends=user.friends
+            friends=user.friends,
+            sessions_invited=user.sessions_invited
         )
 
 
@@ -331,45 +333,12 @@ class MiningSession(BaseModel):
         orm_mode = True
 
 
-class MiningSessionInvite(BaseModel):
-    id: int
-    name: str
-    created: datetime
-
-    class Config:
-        orm_mode = True
-
-
 class MiningSessionWithUsersEntries(MiningSession):
-    users_invited: List[MiningSessionInvite]
+    users_invited: List[Related]
     entries: List[MiningSessionEntry]
 
     class Config:
         orm_mode = True
-
-    @classmethod
-    def from_orm(
-            cls, obj: "screfinery.stores.model.MiningSession"
-            ) -> "MiningSessionWithUsersEntries":
-        return cls(
-            id=obj.id,
-            creator=obj.creator,
-            name=obj.name,
-            created=obj.created,
-            updated=obj.updated,
-            archived=obj.archived,
-            yield_scu=obj.yield_scu,
-            yield_uec=obj.yield_uec,
-            users_invited=[
-                MiningSessionInvite(
-                    id=rel.user.id,
-                    name=rel.user.name,
-                    created=rel.created
-                )
-                for rel in obj.users_invited
-            ],
-            entries=obj.entries
-        )
 
 
 class MiningSessionListItem(BaseModel):
@@ -404,3 +373,20 @@ class MiningSessionUpdate(BaseModel):
     yield_uec: Optional[float]
     users_invited: Optional[List[Related]]
 
+
+class MiningSessionPayoutUser(BaseModel):
+    user_id: int
+    user_name: str
+    amount: float
+
+
+class MiningSessionPayoutItem(BaseModel):
+    user: Related
+    recipients: List[MiningSessionPayoutUser]
+
+
+class MiningSessionPayoutSummary(BaseModel):
+    average_profit: float
+    total_profit: float
+    user_profits: List[MiningSessionPayoutUser]
+    payouts: List[MiningSessionPayoutItem]

@@ -24,6 +24,7 @@ def get_by_id(db: Session, user_id: int) -> Optional[User]:
         db.query(User)
         .options(joinedload(User.scopes))
         .options(joinedload(User.friends))
+        .options(joinedload(User.sessions_invited))
         .filter(User.id == user_id)
         .first()
     )
